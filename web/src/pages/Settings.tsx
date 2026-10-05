@@ -20,7 +20,7 @@ export function SettingsPage() {
       <PageHeader title="Settings" subtitle="Owner only. Keys and webhooks are stored on your server, never in the browser." />
       <div className="grid gap-5 xl:grid-cols-2">
         <Section title={<span className="flex items-center gap-2"><KeyRound size={16} /> Eldorado API keys</span>}
-          subtitle="Create them with the credentials tool, then paste here. The secret is never shown again.">
+          subtitle="Easiest: in the Chrome extension click Connect Eldorado API (with an Eldorado tab open). Or paste keys here. The secret is never shown again.">
           <div className="space-y-3">
             <Field label="Client ID"><input className="field font-mono text-[13px]" value={s.eldorado.clientId} onChange={e => set(x => { x.eldorado.clientId = e.target.value; })} /></Field>
             <Field label="Client secret" hint={s.eldorado.hasSecret ? `Saved (ends in …${s.eldorado.secretLast4}). Leave empty to keep it.` : 'Not set'}>

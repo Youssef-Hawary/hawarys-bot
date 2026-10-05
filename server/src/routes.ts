@@ -461,6 +461,18 @@ api.post('/ext/heartbeat', async c => {
   return c.json({ leader, recording: getSetting('recording', false), running: getBot().running, template: getSetting('requestUrlTemplate', null), user: { name: user.display_name, role: user.role } });
 });
 
+// The owner's extension creates Eldorado API keys from the logged-in Eldorado tab and hands them over here.
+api.post('/ext/eldorado-keys', ownerOnly, async c => {
+  const { clientId, clientSecret } = await c.req.json();
+  if (!clientId || !clientSecret) return c.json({ error: 'clientId and clientSecret required' }, 400);
+  setSetting('eldorado', { clientId: String(clientId), clientSecret: String(clientSecret) });
+  audit(c.get('user').id, 'settings.eldorado_keys', { via: 'extension' });
+  log('success', `🔑 ${c.get('user').display_name} connected the Eldorado API from the extension`);
+  changed('bot');
+  try { await eldorado.testToken(); return c.json({ tested: true }); }
+  catch (e) { return c.json({ tested: false, testError: (e as Error).message }); }
+});
+
 api.post('/ext/request-details', async c => {
   const b = await c.req.json();
   if (!b.requestId || !b.fields) return c.json({ error: 'requestId and fields required' }, 400);

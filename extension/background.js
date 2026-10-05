@@ -118,6 +118,18 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     // Only learn the address from pages a person opened, not from our hidden reader window.
     if (sender.tab?.id !== reader?.tabId) call('/ext/request-url-template', { template: d.template }).catch(() => {});
   }
+  if (msg.type === 'connect-eldorado') {
+    (async () => {
+      const [tab] = await eldoradoTabs();
+      if (!tab) throw new Error('Open eldorado.gg in a tab and log in first');
+      let keys;
+      try { keys = await chrome.tabs.sendMessage(tab.id, { type: 'create-keys' }); }
+      catch { throw new Error('Reload the Eldorado tab (F5) and try again'); }
+      if (!keys?.ok) throw new Error(keys?.error || 'Could not create keys');
+      return call('/ext/eldorado-keys', { clientId: keys.clientId, clientSecret: keys.clientSecret });
+    })().then(r => reply({ ok: true, ...r }), e => reply({ ok: false, error: String(e.message || e) }));
+    return true;
+  }
   if (msg.type === 'tick') { tick().then(() => reply({ ok: true })); return true; }
 });
 

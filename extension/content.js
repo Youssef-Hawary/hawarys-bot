@@ -77,6 +77,20 @@ function askPage(kind, payload, timeoutMs = 15000) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === 'probe-chat') { askPage('probe-chat', {}, 3000).then(reply); return true; }
+  if (msg.type === 'create-keys') {
+    fetch('/api/client-credentials', {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `hawarys-bot-${new Date().toISOString().slice(0, 10)}`, expiration: '365.00:00:00' }),
+    })
+      .then(async r => {
+        const d = await r.json().catch(() => ({}));
+        const clientId = d.clientId ?? d.data?.clientId, clientSecret = d.clientSecret ?? d.data?.clientSecret;
+        if (!r.ok || !clientId || !clientSecret) throw new Error(r.status === 401 || r.status === 403 ? 'Log in to Eldorado in this Chrome first' : (d.message || d.title || `Eldorado said HTTP ${r.status}`));
+        reply({ ok: true, clientId, clientSecret });
+      })
+      .catch(e => reply({ ok: false, error: String(e.message || e) }));
+    return true;
+  }
   if (msg.type === 'send-chat') { askPage('send-chat', { conversationId: msg.conversationId, text: msg.text }).then(reply); return true; }
   if (msg.type === 'read-now') { lastSent = ''; check(); reply({ ok: true }); }
 });

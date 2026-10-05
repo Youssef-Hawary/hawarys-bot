@@ -53,6 +53,13 @@ $('login').addEventListener('submit', async e => {
 
 $('open').onclick = async () => { const { server } = await chrome.storage.local.get('server'); chrome.tabs.create({ url: server }); };
 $('eld').onclick = () => chrome.tabs.create({ url: 'https://www.eldorado.gg/' });
+$('keys').onclick = async () => {
+  $('keys').disabled = true;
+  $('keysMsg').textContent = 'Creating API keys on Eldorado…';
+  const r = await chrome.runtime.sendMessage({ type: 'connect-eldorado' }).catch(e => ({ ok: false, error: e.message }));
+  $('keysMsg').textContent = r?.ok ? (r.tested ? '✅ Eldorado API connected.' : `Keys saved, but the test failed: ${r.testError}`) : `❌ ${r?.error || 'Failed'}`;
+  $('keys').disabled = false;
+};
 $('logout').onclick = async () => { await chrome.storage.local.set({ token: null, status: null }); render(); };
 $('toggle').onclick = async () => {
   const { server, token, status } = await chrome.storage.local.get(['server', 'token', 'status']);

@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node src/index.ts",
     "dev": "node --watch src/index.ts",
-    "demo": "node src/seed-demo.ts && DB_PATH=data/demo.db node src/index.ts",
+    "demo": "node src/seed-demo.ts && node --env-file=demo.env src/index.ts",
     "test": "node --test src/*.test.ts"
   },
   "engines": {
