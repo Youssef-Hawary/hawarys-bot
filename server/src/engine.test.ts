@@ -65,3 +65,11 @@ test('chat messages are never stuck silently: refused chats go to the extension 
   assert.equal(row.status, 'failed');
   assert.match(row.error, /buyer has to write first/);
 });
+
+test('the newest extension version handles the work, not an old copy that connected first', async () => {
+  const { heartbeat, isLeader } = await import('./engine.ts');
+  heartbeat('old-copy', { userId: 1, name: 'Owner', onEldorado: true, version: '1.4.1' });
+  heartbeat('new-copy', { userId: 1, name: 'Owner', onEldorado: true, version: '1.6.0' });
+  assert.equal(isLeader('new-copy'), true);
+  assert.equal(isLeader('old-copy'), false);
+});

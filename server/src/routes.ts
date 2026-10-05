@@ -11,7 +11,7 @@ import { getDiscord, sendDiscord } from './discord.ts';
 import { analytics, workerSummary, workerPay, getFees, LIVE_STATES, type OrderRow } from './money.ts';
 import {
   bus, log, changed, getBot, getMessages, setRunning, receiveDetails, heartbeat, liveClients, outboxFor, outboxResult, fill, isLeader,
-  pollNow,
+  pollNow, detailsFailed,
 } from './engine.ts';
 
 type Env = { Variables: { user: User; token: string } };
@@ -521,6 +521,12 @@ api.post('/ext/eldorado-keys', ownerOnly, async c => {
 
 // Eldorado's live feed said a new boosting request was created: check right away.
 api.post('/ext/poke', async c => c.json({ fresh: await pollNow() }));
+
+api.post('/ext/details-failed', async c => {
+  const { requestId, error } = await c.req.json();
+  if (requestId) detailsFailed(String(requestId), String(error ?? 'unknown').slice(0, 200));
+  return c.json({ ok: true });
+});
 
 // The extension reports problems here so they show up in the Activity log.
 const lastReports = new Map<string, number>();

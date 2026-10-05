@@ -409,10 +409,25 @@ export function liveClients() {
 
 export const isLeader = (clientId: string) => leaderId() === clientId;
 
-/** Only one extension sends chat messages: the longest-connected one with an Eldorado tab open. */
+/** Only one extension does the work: among those with an Eldorado tab open and the newest extension version
+ * (an old copy somewhere must not take over with old code), the longest-connected one. */
+const versionKey = (v: string) => String(v ?? '').split('.').slice(0, 3).map(n => String(parseInt(n, 10) || 0).padStart(4, '0')).join('.');
 function leaderId() {
-  const live = [...clients.entries()].filter(([, c]) => now() - c.lastSeen <= 45_000 && c.onEldorado).sort((a, b) => a[1].since - b[1].since);
-  return live[0]?.[0] ?? null;
+  const live = [...clients.entries()].filter(([, c]) => now() - c.lastSeen <= 45_000 && c.onEldorado);
+  const newest = live.reduce((m, [, c]) => (versionKey(c.version) > m ? versionKey(c.version) : m), '');
+  const eligible = live.filter(([, c]) => versionKey(c.version) === newest).sort((a, b) => a[1].since - b[1].since);
+  return eligible[0]?.[0] ?? null;
+}
+
+/** The extension couldn't read a request's details. After 3 tries (e.g. the request was closed) it's skipped. */
+const detailFailures = new Map<string, number>();
+export function detailsFailed(requestId: string, error: string) {
+  const n = (detailFailures.get(requestId) ?? 0) + 1;
+  detailFailures.set(requestId, n);
+  if (n < 3) return;
+  detailFailures.delete(requestId);
+  const res = db.prepare(`UPDATE requests SET status = 'skipped', reason = ? WHERE id = ? AND status = 'needs_details'`).run(`couldn't read details: ${error}`.slice(0, 300), requestId);
+  if (res.changes) { log('skip', `Skipped a request: couldn't read its details (${error})`); changed('requests'); }
 }
 
 export async function outboxFor(clientId: string) {

@@ -42,24 +42,6 @@ async function chatCapableTab() {
   return null;
 }
 
-async function readRequests(template, ids) {
-  for (const id of ids) {
-    const url = template.replace('{id}', id);
-    try {
-      if (!reader) {
-        const w = await chrome.windows.create({ url, state: 'minimized', focused: false });
-        reader = { windowId: w.id, tabId: w.tabs[0].id };
-      } else {
-        await chrome.tabs.update(reader.tabId, { url });
-      }
-      await new Promise(resolve => { waiting.set(id, resolve); setTimeout(() => { waiting.delete(id); resolve(); }, 25000); });
-    } catch {
-      reader = null; // window was closed by the user
-    }
-  }
-  if (reader) { chrome.windows.remove(reader.windowId).catch(() => {}); reader = null; }
-}
-
 /** Reads request details through Eldorado's API from a normal Eldorado tab. Returns the ids it couldn't read. */
 async function fetchAllDetails(ids, tabs) {
   if (!ids.length) return [];
@@ -74,7 +56,8 @@ async function fetchAllDetails(ids, tabs) {
       await save({ lastDetails: { at: Date.now(), fields: r.fields, result: res } });
     } else {
       left.push(requestId);
-      await call('/ext/report', { message: `Couldn't read request ${requestId.slice(0, 8)}: ${r?.error}` }).catch(() => {});
+      // After a few failed tries the server gives up on it (e.g. the request was closed), so it can't clog the loop.
+      await call('/ext/details-failed', { requestId, error: r?.error ?? 'unknown' }).catch(() => {});
     }
   }
   return left;
@@ -102,26 +85,8 @@ async function tick() {
     if (hb.leader) {
       const pending = await call(`/ext/pending-details?clientId=${id}`);
       status.pendingDetails = pending.ids.length;
-      const left = await fetchAllDetails(pending.ids, tabs);
-      if (pending.template && left.length) await readRequests(pending.template, left);
-
-      const chatTab = await chatCapableTab();
-      status.chatReady = !!chatTab;
-      if (chatTab) {
-        for (const item of await call(`/ext/outbox?clientId=${id}`)) {
-          let r, conversationId = item.conversation_id;
-          if (!conversationId && item.request_id) {
-            try { const c = await chrome.tabs.sendMessage(chatTab.id, { type: 'open-chat', requestId: item.request_id }); conversationId = c?.conversationId; if (!c?.ok) r = c; }
-            catch (e) { r = { ok: false, error: String(e.message || e) }; }
-          }
-          if (conversationId && !r) {
-            try { r = await chrome.tabs.sendMessage(chatTab.id, { type: 'send-chat', conversationId, text: item.text }); }
-            catch (e) { r = { ok: false, error: String(e.message || e) }; }
-          }
-          r ??= { ok: false, error: 'no chat to send it to' };
-          await call(`/ext/outbox/${item.id}`, { ok: !!r?.ok, error: r?.error });
-        }
-      }
+      await fetchAllDetails(pending.ids, tabs);
+      status.chatReady = tabs.length > 0;
     }
     await save({ status });
   } catch (e) {
@@ -148,6 +113,7 @@ async function onBoostingEvent(ids = []) {
   }) : []);
   await poke;
   tick();
+  flushOutbox();
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -186,6 +152,35 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'tick') { tick().then(() => reply({ ok: true })); return true; }
 });
 
+// ---- chat messages: their own loop, so reading requests can never hold them up ----
+let sending = false;
+async function flushOutbox() {
+  if (sending) return;
+  sending = true;
+  try {
+    const { token, status } = await store(['token', 'status']);
+    if (!token || !status?.leader) return;
+    const [chatTab] = await eldoradoTabs();
+    if (!chatTab) return;
+    const items = await call(`/ext/outbox?clientId=${await clientId()}`);
+    for (const item of items) {
+      let r, conversationId = item.conversation_id;
+      if (!conversationId && item.request_id) {
+        try { const c = await chrome.tabs.sendMessage(chatTab.id, { type: 'open-chat', requestId: item.request_id }); conversationId = c?.conversationId; if (!c?.ok) r = c; }
+        catch (e) { r = { ok: false, error: `Eldorado tab not ready (${String(e.message || e)}). Press F5 on it.` }; }
+      }
+      if (conversationId && !r) {
+        try { r = await chrome.tabs.sendMessage(chatTab.id, { type: 'send-chat', conversationId, text: item.text }); }
+        catch (e) { r = { ok: false, error: `Eldorado tab not ready (${String(e.message || e)}). Press F5 on it.` }; }
+      }
+      r ??= { ok: false, error: 'no chat to send it to' };
+      await call(`/ext/outbox/${item.id}`, { ok: !!r?.ok, error: r?.error });
+    }
+  } catch { /* next round */ }
+  finally { sending = false; }
+}
+setInterval(flushOutbox, 3000);
+
 // ---- fast check: Eldorado's request list every 2 seconds, from the Eldorado tab ----
 // Works even when Eldorado's live feed doesn't announce a request. Only the main browser does it, only while the bot runs.
 const seenRequests = new Set();
@@ -221,7 +216,7 @@ async function scanList() {
     if (!listSeeded) { listSeeded = true; return; } // first look: these were already there
     if (fresh.length) {
       await Promise.all(fresh.map(i => handleNewRequest(tab.id, i)));
-      tick(); // sends the opener message straight away
+      flushOutbox(); // sends the opener message straight away
     }
   } finally { scanning = false; }
 }
