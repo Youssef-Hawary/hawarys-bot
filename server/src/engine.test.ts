@@ -46,3 +46,22 @@ test('a request found by the extension is offered at once and the opener is queu
   assert.ok(opener, 'opener queued');
   assert.match(opener.text, /Hi buyer3/);
 });
+
+test('chat messages are never stuck silently: refused chats go to the extension with the reason', async () => {
+  const { heartbeat, outboxFor, outboxResult } = await import('./engine.ts');
+  heartbeat('ext-1', { userId: 1, name: 'Owner', onEldorado: true, version: 'test' });
+  db.prepare(`DELETE FROM outbox`).run();
+  db.prepare(`INSERT INTO outbox (kind, request_id, text, not_before, created_at) VALUES ('opener', 'r-refused', 'hi', ?, ?)`).run(Date.now(), Date.now());
+  db.prepare(`INSERT INTO outbox (kind, request_id, text, not_before, created_at) VALUES ('opener', 'r-ok', 'hello', ?, ?)`).run(Date.now(), Date.now());
+  (eldorado as any).createConversation = async (id: string) => { if (id === 'r-refused') throw new Error('Eldorado 400'); return { talkJsConversationId: 'conv-1' }; };
+  const items = await outboxFor('ext-1');
+  assert.equal(items.length, 2);
+  const ok = items.find((i: any) => i.request_id === 'r-ok');
+  const refused = items.find((i: any) => i.request_id === 'r-refused');
+  assert.equal(ok.conversation_id, 'conv-1');
+  assert.match(refused.error, /couldn't open the chat/);
+  outboxResult(refused.id, false, 'buyer has to write first');
+  const row = db.prepare(`SELECT status, error FROM outbox WHERE id = ?`).get(refused.id) as any;
+  assert.equal(row.status, 'failed');
+  assert.match(row.error, /buyer has to write first/);
+});

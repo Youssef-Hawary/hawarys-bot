@@ -417,19 +417,27 @@ function leaderId() {
 
 export async function outboxFor(clientId: string) {
   if (leaderId() !== clientId) return [];
-  const items = db.prepare(`SELECT * FROM outbox WHERE status = 'pending' AND not_before <= ? ORDER BY id LIMIT 5`).all(now()) as any[];
+  // Newest first: a fresh opener matters more than an old one. Up to 20 per round, so nothing blocks the queue.
+  const items = db.prepare(`SELECT * FROM outbox WHERE status = 'pending' AND not_before <= ? ORDER BY id DESC LIMIT 20`).all(now()) as any[];
   const ready = [];
   for (const it of items) {
     // Messages older than 12h no longer fit the conversation.
     if (now() - it.not_before > 12 * 3600_000) { db.prepare(`UPDATE outbox SET status = 'dropped', error = 'too old' WHERE id = ?`).run(it.id); continue; }
-    if (!it.conversation_id && it.request_id && hasCreds()) {
+    if (!it.conversation_id && it.request_id && hasCreds() && !it.error) {
       try {
         const conv = await eldorado.createConversation(it.request_id);
-        it.conversation_id = conv?.talkJsConversationId ?? null;
+        it.conversation_id = conv?.talkJsConversationId ?? conv?.conversationId ?? null;
+        if (!it.conversation_id) throw new Error(`no chat id in Eldorado's reply (${Object.keys(conv ?? {}).join(', ') || 'empty'})`);
         db.prepare('UPDATE outbox SET conversation_id = ? WHERE id = ?').run(it.conversation_id, it.id);
-      } catch (e) { log('warn', `Couldn't open chat for follow-up: ${(e as Error).message}`); }
+      } catch (e) {
+        // Not fatal: the extension will try to open the chat from the Eldorado tab instead.
+        it.error = `bot couldn't open the chat: ${(e as Error).message}`;
+        db.prepare('UPDATE outbox SET error = ? WHERE id = ?').run(it.error, it.id);
+        changed('outbox');
+      }
     }
-    if (it.conversation_id) ready.push(it);
+    if (it.conversation_id || it.request_id) ready.push(it);
+    else { db.prepare(`UPDATE outbox SET status = 'failed', error = 'no chat to send it to' WHERE id = ?`).run(it.id); changed('outbox'); }
   }
   return ready;
 }

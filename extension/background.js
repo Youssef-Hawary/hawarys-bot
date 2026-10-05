@@ -109,9 +109,16 @@ async function tick() {
       status.chatReady = !!chatTab;
       if (chatTab) {
         for (const item of await call(`/ext/outbox?clientId=${id}`)) {
-          let r;
-          try { r = await chrome.tabs.sendMessage(chatTab.id, { type: 'send-chat', conversationId: item.conversation_id, text: item.text }); }
-          catch (e) { r = { ok: false, error: String(e.message || e) }; }
+          let r, conversationId = item.conversation_id;
+          if (!conversationId && item.request_id) {
+            try { const c = await chrome.tabs.sendMessage(chatTab.id, { type: 'open-chat', requestId: item.request_id }); conversationId = c?.conversationId; if (!c?.ok) r = c; }
+            catch (e) { r = { ok: false, error: String(e.message || e) }; }
+          }
+          if (conversationId && !r) {
+            try { r = await chrome.tabs.sendMessage(chatTab.id, { type: 'send-chat', conversationId, text: item.text }); }
+            catch (e) { r = { ok: false, error: String(e.message || e) }; }
+          }
+          r ??= { ok: false, error: 'no chat to send it to' };
           await call(`/ext/outbox/${item.id}`, { ok: !!r?.ok, error: r?.error });
         }
       }

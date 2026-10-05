@@ -90,6 +90,7 @@ function askPage(kind, payload, timeoutMs = 15000) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === 'probe-chat') { askPage('probe-chat', {}, 3000).then(reply); return true; }
+  if (msg.type === 'open-chat') { openChat(msg.requestId).then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'poll-list') { pollList().then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'fetch-details') { fetchDetails(msg.requestId).then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'create-keys') { createKeys().then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
@@ -168,4 +169,23 @@ async function pollList() {
   if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
   const d = await res.json().catch(() => ({}));
   return { ok: true, items: Array.isArray(d.results) ? d.results : [] };
+}
+
+// Opens (or finds) the chat with the buyer of a request, like the "Chat" button on Eldorado's request page.
+async function openChat(requestId) {
+  const { headers = {} } = await askPage('site-headers', {}, 3000);
+  const h = { ...headers, Accept: 'application/json, text/plain, */*' };
+  // Already open? The request itself says so.
+  const got = await fetch(`/api/boostingOffers/boostingRequests/${requestId}`, { credentials: 'include', headers: h }).catch(() => null);
+  if (got?.ok) {
+    const d = await got.json().catch(() => ({}));
+    const id = (d.boostingRequest ?? d).sellerDetails?.talkJsConversationId;
+    if (id) return { ok: true, conversationId: id };
+  }
+  const res = await fetch(`/api/boostingOffers/boostingRequests/${requestId}/createConversationForSeller`, { method: 'POST', credentials: 'include', headers: h });
+  const text = await res.text();
+  let d = {}; try { d = JSON.parse(text); } catch { /* not JSON */ }
+  if (res.ok && d.talkJsConversationId) return { ok: true, conversationId: d.talkJsConversationId };
+  const why = (d.messages && d.messages.join(' ')) || d.message || d.title || text.slice(0, 160);
+  return { ok: false, error: `Eldorado won't open this chat (HTTP ${res.status}${why ? `: ${why}` : ''}). The buyer may have to write first.` };
 }
