@@ -36,7 +36,7 @@ $('login').addEventListener('submit', async e => {
   e.preventDefault();
   $('loginErr').textContent = '';
   let server = $('server').value.trim().replace(/\/+$/, '');
-  if (!/^https?:\/\//.test(server)) server = 'https://' + server;
+  if (!/^https?:\/\//.test(server)) server = (/^(localhost|127\.|192\.168\.|10\.)/.test(server) ? 'http://' : 'https://') + server;
   try {
     const origin = new URL(server).origin;
     const granted = await chrome.permissions.request({ origins: [origin + '/*'] });
