@@ -77,20 +77,26 @@ function askPage(kind, payload, timeoutMs = 15000) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === 'probe-chat') { askPage('probe-chat', {}, 3000).then(reply); return true; }
-  if (msg.type === 'create-keys') {
-    fetch('/api/client-credentials', {
-      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: `hawarys-bot-${new Date().toISOString().slice(0, 10)}`, expiration: '365.00:00:00' }),
-    })
-      .then(async r => {
-        const d = await r.json().catch(() => ({}));
-        const clientId = d.clientId ?? d.data?.clientId, clientSecret = d.clientSecret ?? d.data?.clientSecret;
-        if (!r.ok || !clientId || !clientSecret) throw new Error(r.status === 401 || r.status === 403 ? 'Log in to Eldorado in this Chrome first' : (d.message || d.title || `Eldorado said HTTP ${r.status}`));
-        reply({ ok: true, clientId, clientSecret });
-      })
-      .catch(e => reply({ ok: false, error: String(e.message || e) }));
-    return true;
-  }
+  if (msg.type === 'create-keys') { createKeys().then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'send-chat') { askPage('send-chat', { conversationId: msg.conversationId, text: msg.text }).then(reply); return true; }
   if (msg.type === 'read-now') { lastSent = ''; check(); reply({ ok: true }); }
 });
+
+// Creates Eldorado seller API keys with the logged-in session, sending the same extra headers
+// (XSRF token etc.) that Eldorado's own app sends, so the request isn't refused.
+async function createKeys() {
+  const { headers = {} } = await askPage('site-headers', {}, 3000);
+  if (!Object.keys(headers).length) throw new Error('Eldorado hasn\'t loaded yet. Click around on Eldorado for a few seconds (e.g. open your notifications), then try again.');
+  const res = await fetch('/api/client-credentials', {
+    method: 'POST', credentials: 'include',
+    headers: { ...headers, 'Content-Type': 'application/json', Accept: 'application/json, text/plain, */*' },
+    body: JSON.stringify({ name: `hawarys-bot-${new Date().toISOString().slice(0, 10)}`, expiration: '365.00:00:00' }),
+  });
+  const text = await res.text();
+  let d = {}; try { d = JSON.parse(text); } catch { /* not JSON */ }
+  const clientId = d.clientId ?? d.data?.clientId, clientSecret = d.clientSecret ?? d.data?.clientSecret;
+  if (res.ok && clientId && clientSecret) return { ok: true, clientId, clientSecret };
+  const detail = (d.messages && d.messages.join(' ')) || d.message || d.title || text.slice(0, 160);
+  const sent = Object.keys(headers).join(', ');
+  throw new Error(`Eldorado said HTTP ${res.status}: ${detail || 'no details'} [headers sent: ${sent}]`);
+}

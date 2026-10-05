@@ -1,6 +1,8 @@
 // Runs inside the Eldorado page (MAIN world).
 // 1) Recorder: copies Eldorado's own /api/ calls (URL, status, bodies) so we can learn endpoints. Secrets are redacted.
-// 2) Chat bridge: sends a chat message through the page's own TalkJS session, if one exists.
+// 2) Remembers the extra headers Eldorado's own app puts on its API calls (e.g. its XSRF token), in memory only,
+//    so the extension's own Eldorado calls (creating API keys) look the same and aren't refused.
+// 3) Chat bridge: sends a chat message through the page's own TalkJS session, if one exists.
 (() => {
   if (window.__hawarysBot) return;
   window.__hawarysBot = true;
@@ -18,8 +20,17 @@
   const interesting = url => /\/api\//.test(url) && !/authentication|login|logout|token|payment|checkout|wallet|withdraw/i.test(url);
   const emit = data => window.postMessage({ __hb: 'capture', data }, location.origin);
 
+  const siteHeaders = {};
+  const SKIP_HEADER = /^(content-type|content-length|accept)$/i;
+  const isOwnApi = url => { try { const u = new URL(url, location.href); return u.origin === location.origin && u.pathname.startsWith('/api/'); } catch { return false; } };
+  const remember = (name, value) => { if (name && value != null && !SKIP_HEADER.test(name)) siteHeaders[String(name).toLowerCase()] = String(value); };
+
   const origFetch = window.fetch;
   window.fetch = async function (input, init) {
+    try {
+      const u = typeof input === 'string' ? input : input?.url;
+      if (u && isOwnApi(u) && init?.headers) new Headers(init.headers).forEach((v, k) => remember(k, v));
+    } catch { /* ignore */ }
     const res = await origFetch.apply(this, arguments);
     try {
       const url = new URL(typeof input === 'string' ? input : input.url, location.href).href;
@@ -36,6 +47,11 @@
   XMLHttpRequest.prototype.open = function (method, url) {
     this.__hb = { method: String(method).toUpperCase(), url: String(url) };
     return open.apply(this, arguments);
+  };
+  const setHeader = XMLHttpRequest.prototype.setRequestHeader;
+  XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+    try { if (this.__hb && isOwnApi(this.__hb.url)) remember(name, value); } catch { /* ignore */ }
+    return setHeader.apply(this, arguments);
   };
   XMLHttpRequest.prototype.send = function (body) {
     const meta = this.__hb;
@@ -66,6 +82,7 @@
   window.addEventListener('message', async e => {
     if (e.source !== window || !e.data || typeof e.data.__hb !== 'string') return;
     const { __hb: kind, id } = e.data;
+    if (kind === 'site-headers') window.postMessage({ __hb: 'site-headers-result', id, headers: { ...siteHeaders } }, location.origin);
     if (kind === 'probe-chat') window.postMessage({ __hb: 'probe-chat-result', id, ok: !!findTalkSession() }, location.origin);
     if (kind === 'send-chat') {
       try {
