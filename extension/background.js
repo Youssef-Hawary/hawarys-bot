@@ -152,6 +152,19 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'tick') { tick().then(() => reply({ ok: true })); return true; }
 });
 
+/** Downloads an uploaded image (e.g. "opener:valorant") from the dashboard, as base64 for the Eldorado tab. */
+async function fetchImage(key) {
+  const { server, token } = await store(['server', 'token']);
+  const game = String(key).split(':')[1];
+  const res = await fetch(`${server}/api/messages/images/${encodeURIComponent(game)}/file`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`image missing on the dashboard (HTTP ${res.status})`);
+  const mime = res.headers.get('content-type') || 'image/png';
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { b64: btoa(bin), mime, name: `${game}.${mime.split('/')[1] || 'png'}` };
+}
+
 // ---- chat messages: their own loop, so reading requests can never hold them up ----
 let sending = false;
 async function flushOutbox() {
@@ -169,8 +182,12 @@ async function flushOutbox() {
         try { const c = await chrome.tabs.sendMessage(chatTab.id, { type: 'open-chat', requestId: item.request_id }); conversationId = c?.conversationId; if (!c?.ok) r = c; }
         catch (e) { r = { ok: false, error: `Eldorado tab not ready (${String(e.message || e)}). Press F5 on it.` }; }
       }
+      let image = null;
+      if (conversationId && !r && item.image) {
+        try { image = await fetchImage(item.image); } catch (e) { r = { ok: false, error: String(e.message || e) }; }
+      }
       if (conversationId && !r) {
-        try { r = await chrome.tabs.sendMessage(chatTab.id, { type: 'send-chat', conversationId, text: item.text }); }
+        try { r = await chrome.tabs.sendMessage(chatTab.id, { type: 'send-chat', conversationId, text: item.text, image }); }
         catch (e) { r = { ok: false, error: `Eldorado tab not ready (${String(e.message || e)}). Press F5 on it.` }; }
       }
       r ??= { ok: false, error: 'no chat to send it to' };

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Save, Plus, Trash2, FlaskConical, Inbox } from 'lucide-react';
+import { Save, Plus, Trash2, FlaskConical, Inbox, ImagePlus } from 'lucide-react';
 import { api, ago, useData } from '../api.ts';
 import { Badge, Button, Card, Field, Num, PageHeader, Section, Toggle, clsx, useAction } from '../components/ui.tsx';
 
@@ -49,7 +49,7 @@ export function AutoChat() {
 
       <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
         <div className="space-y-5">
-          <Section title="Opening message · A/B test" subtitle="Sent with every offer. With 2+ enabled, the bot picks one at random and tracks which wins more buyers."
+          <Section title="Opening message · A/B test" subtitle="Sent in the buyer's chat right after every offer. With 2+ enabled, the bot picks one at random and tracks which wins more buyers."
             actions={<Button size="sm" icon={<Plus size={14} />} onClick={() => set(x => { x.openers.push({ id: String.fromCharCode(65 + x.openers.length), enabled: true, text: '' }); })}>Add variant</Button>}>
             <div className="space-y-4">
               {m.openers.map((o: any, i: number) => {
@@ -69,6 +69,8 @@ export function AutoChat() {
               })}
             </div>
           </Section>
+
+          <OpenerImages />
 
           <Section title="Follow-up" subtitle="One nudge if the buyer hasn't picked anyone yet. Dropped automatically if the request is won/lost or it's more than 12h late."
             actions={<Toggle checked={m.followUp.enabled} onChange={v => set(x => { x.followUp.enabled = v; })} />}>
@@ -98,6 +100,7 @@ export function AutoChat() {
                 <div className="flex items-center gap-2 text-[12px]">
                   <Badge tone={it.status === 'sent' ? 'ok' : it.status === 'pending' ? 'warn' : it.status === 'failed' ? 'bad' : 'muted'}>{it.status}</Badge>
                   <span className="font-semibold capitalize">{it.kind.replace('_', ' ')}</span>
+                  {it.image && <Badge tone="muted">+ image</Badge>}
                   <span className="ml-auto text-fg-3">{ago(it.created_at)}</span>
                 </div>
                 <p className="mt-1.5 line-clamp-3 text-[13px] text-fg-2">{it.text}</p>
@@ -108,5 +111,58 @@ export function AutoChat() {
         </Card>
       </div>
     </>
+  );
+}
+
+const IMAGE_GAMES = [{ id: 'valorant', name: 'Valorant', color: 'text-valo' }, { id: 'lol', name: 'League of Legends', color: 'text-lol' }] as const;
+
+/** One picture per game, sent in the chat right after the opening message (e.g. proof of rank, reviews). */
+function OpenerImages() {
+  const { data, reload } = useData<Record<string, { name: string; size: number; updated_at: number } | null>>('/messages/images', ['messages']);
+  const { busy, run } = useAction();
+  const upload = (game: string, file: File) => run(`up-${game}`, async () => {
+    if (file.size > 5 * 1024 * 1024) throw new Error('Image is too big (max 5 MB)');
+    const res = await fetch(`/api/messages/images/${game}`, {
+      method: 'PUT', credentials: 'same-origin', body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': file.name.replace(/[^\w.\- ]/g, '') },
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error ?? `Upload failed (${res.status})`);
+    await reload();
+  }, 'Image saved. It goes out with the next opener.');
+  const remove = (game: string) => run(`rm-${game}`, async () => { await api(`/messages/images/${game}`, { method: 'DELETE' }); await reload(); }, 'Image removed');
+
+  return (
+    <Section title="Opening image" subtitle="One picture per game, sent in the chat right after the opening message. PNG, JPG, WEBP or GIF, up to 5 MB. Saved right away (no Save button needed).">
+      <div className="grid gap-4 md:grid-cols-2">
+        {IMAGE_GAMES.map(g => {
+          const img = data?.[g.id];
+          return (
+            <div key={g.id} className="well overflow-hidden">
+              <div className="flex items-center justify-between border-b border-white/[.05] px-3 py-2">
+                <span className={clsx('text-[12px] font-black uppercase tracking-[.12em]', g.color)}>{g.name}</span>
+                {img && <span className="text-[11.5px] text-fg-3">{Math.round(img.size / 1024)} KB · {ago(img.updated_at)}</span>}
+              </div>
+              <div className="grid h-44 place-items-center bg-black/30">
+                {img
+                  ? <img src={`/api/messages/images/${g.id}/file?v=${img.updated_at}`} alt={`${g.name} opener image`} className="max-h-44 max-w-full object-contain" />
+                  : <span className="flex flex-col items-center gap-1 text-[12.5px] text-fg-3"><ImagePlus size={22} />No image: only the text is sent</span>}
+              </div>
+              <div className="flex gap-2 p-3">
+                <label className="flex-1">
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(g.id, f); }} />
+                  <span className="inline-flex h-8 w-full cursor-pointer items-center justify-center gap-2 rounded-[7px] border border-white/[.08] bg-white/[.04] text-[13px] font-semibold hover:bg-white/[.07]">
+                    {busy === `up-${g.id}` ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <ImagePlus size={14} />}
+                    {img ? 'Replace image' : 'Upload image'}
+                  </span>
+                </label>
+                {img && <Button size="sm" variant="ghost" icon={<Trash2 size={13} />} loading={busy === `rm-${g.id}`} onClick={() => remove(g.id)}>Remove</Button>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Section>
   );
 }

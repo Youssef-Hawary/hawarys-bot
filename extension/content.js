@@ -94,7 +94,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === 'poll-list') { pollList().then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'fetch-details') { fetchDetails(msg.requestId).then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'create-keys') { createKeys().then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
-  if (msg.type === 'send-chat') { askPage('send-chat', { conversationId: msg.conversationId, text: msg.text }, 40000).then(reply); return true; }
+  if (msg.type === 'send-chat') { askPage('send-chat', { conversationId: msg.conversationId, text: msg.text, image: msg.image ?? null }, 60000).then(reply); return true; }
   if (msg.type === 'read-now') { lastSent = ''; check(); reply({ ok: true }); }
 });
 

@@ -321,6 +321,53 @@ api.put('/messages', async c => {
   log('info', `💬 ${c.get('user').display_name} updated auto-chat messages`);
   return c.json({ ok: true });
 });
+// ---- opener image per game (sent in chat after the opening message) ----
+const IMAGE_TYPES: Record<string, (b: Uint8Array) => boolean> = {
+  'image/png': b => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
+  'image/jpeg': b => b[0] === 0xff && b[1] === 0xd8,
+  'image/webp': b => b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50,
+  'image/gif': b => b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46,
+};
+const imageGame = (g: string) => (GAMES as string[]).includes(g) ? g as Game : null;
+
+api.get('/messages/images', c => {
+  const rows = db.prepare(`SELECT key, name, mime, length(data) AS size, updated_at FROM files WHERE key LIKE 'opener:%'`).all() as any[];
+  return c.json(Object.fromEntries(GAMES.map(g => [g, rows.find(r => r.key === `opener:${g}`) ?? null])));
+});
+
+api.put('/messages/images/:game', async c => {
+  const game = imageGame(c.req.param('game'));
+  if (!game) return c.json({ error: 'Unknown game' }, 404);
+  const mime = String(c.req.header('content-type') ?? '').split(';')[0].trim();
+  const data = new Uint8Array(await c.req.arrayBuffer());
+  if (!IMAGE_TYPES[mime] || data.length < 12 || !IMAGE_TYPES[mime](data)) return c.json({ error: 'Use a PNG, JPG, WEBP or GIF image' }, 400);
+  if (data.length > 5 * 1024 * 1024) return c.json({ error: 'Image is too big (max 5 MB)' }, 400);
+  const name = String(c.req.header('x-file-name') ?? `${game}.${mime.split('/')[1]}`).replace(/[^\w.\- ]/g, '').slice(0, 80) || `${game}.png`;
+  db.prepare('INSERT OR REPLACE INTO files (key, name, mime, data, updated_at) VALUES (?, ?, ?, ?, ?)').run(`opener:${game}`, name, mime, data, now());
+  audit(c.get('user').id, 'messages.image', { game, size: data.length });
+  log('info', `🖼️ ${c.get('user').display_name} set the ${GAME_NAMES[game]} opener image`);
+  changed('messages');
+  return c.json({ ok: true });
+});
+
+api.delete('/messages/images/:game', c => {
+  const game = imageGame(c.req.param('game'));
+  if (!game) return c.json({ error: 'Unknown game' }, 404);
+  db.prepare('DELETE FROM files WHERE key = ?').run(`opener:${game}`);
+  audit(c.get('user').id, 'messages.image_remove', { game });
+  changed('messages');
+  return c.json({ ok: true });
+});
+
+// The image itself (dashboard preview, and the extension when it sends the opener).
+api.get('/messages/images/:game/file', c => {
+  const row = db.prepare('SELECT name, mime, data FROM files WHERE key = ?').get(`opener:${c.req.param('game')}`) as any;
+  if (!row) return c.json({ error: 'No image' }, 404);
+  c.header('Content-Type', row.mime);
+  c.header('Cache-Control', 'private, max-age=60');
+  return c.body(row.data);
+});
+
 api.get('/outbox', c => c.json(db.prepare('SELECT * FROM outbox ORDER BY id DESC LIMIT 100').all()));
 
 // ---------------- team + money ----------------

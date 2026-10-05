@@ -134,7 +134,22 @@ CREATE TABLE IF NOT EXISTS captures (
 CREATE INDEX IF NOT EXISTS idx_orders_state ON orders(state);
 CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
 CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts);
+
+-- Uploaded files (e.g. the opener image per game). Kept in the database so backups include them.
+CREATE TABLE IF NOT EXISTS files (
+  key TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  data BLOB NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 `);
+
+// Columns added after the first version.
+for (const [table, column, type] of [['outbox', 'image', 'TEXT']] as const) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+}
 
 export function getSetting<T>(key: string, fallback: T): T {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;

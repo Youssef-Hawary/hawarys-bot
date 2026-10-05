@@ -77,9 +77,9 @@ function gameFor(item: { gameId?: string | null; title?: string | null }): Game 
   return byText ?? (item.gameId ? map[item.gameId] ?? null : null);
 }
 
-function queue(kind: string, text: string, ids: { orderId?: string; requestId?: string; conversationId?: string | null }, delayMs = 0) {
-  db.prepare('INSERT INTO outbox (kind, conversation_id, order_id, request_id, text, not_before, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(kind, ids.conversationId ?? null, ids.orderId ?? null, ids.requestId ?? null, text, now() + delayMs, now());
+function queue(kind: string, text: string, ids: { orderId?: string; requestId?: string; conversationId?: string | null }, delayMs = 0, image: string | null = null) {
+  db.prepare('INSERT INTO outbox (kind, conversation_id, order_id, request_id, text, not_before, created_at, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(kind, ids.conversationId ?? null, ids.orderId ?? null, ids.requestId ?? null, text, now() + delayMs, now(), image);
   changed('outbox');
 }
 
@@ -177,7 +177,9 @@ export async function processRequest(id: string) {
     const offer = await eldorado.createOffer(id, q.price, q.delivery, text);
     set('offered', { price: q.price, hours: q.hours, offer_id: offer?.id ?? null, variant: opener?.id ?? null, offered_at: now() });
     // The offer's own message isn't shown in the buyer's chat, so the opener also goes out as a chat message right away.
-    if (text) queue('opener', text, { requestId: id });
+    // Plus the opener image for this game, if one is uploaded (Auto-chat page).
+    const image = db.prepare('SELECT key FROM files WHERE key = ?').get(`opener:${game}`) ? `opener:${game}` : null;
+    if (text || image) queue('opener', text, { requestId: id }, 0, image);
     log('success', `✅ Offered $${q.price} (${time}) on ${label}${since(row.created_at)}`);
     const d = getDiscord();
     if (d.newOffer) sendDiscord('📨 Offer sent', label, [{ name: 'Price', value: `$${q.price}`, inline: true }, { name: 'Delivery', value: time, inline: true }]).catch(() => {});

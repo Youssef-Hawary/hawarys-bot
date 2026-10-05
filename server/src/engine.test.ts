@@ -73,3 +73,14 @@ test('the newest extension version handles the work, not an old copy that connec
   assert.equal(isLeader('new-copy'), true);
   assert.equal(isLeader('old-copy'), false);
 });
+
+test('the opener carries the image of the request\'s game', async () => {
+  setSetting('bot', { running: true, dryRun: false, pollSeconds: 10, maxOffersPerHour: 200, syncOnlineStatus: false, deadlineAlertHours: 2 });
+  db.prepare(`INSERT OR REPLACE INTO files (key, name, mime, data, updated_at) VALUES ('opener:lol', 'lol.png', 'image/png', ?, ?)`).run(new Uint8Array([1, 2, 3]), Date.now());
+  (eldorado as any).createOffer = async () => ({ id: 'o4' });
+  const id = '44444444-4444-4444-4444-444444444444';
+  const item = { id, gameId: '17', boostingCategoryId: 'c', boostingCategoryTitle: 'Rank Boost', createdDate: new Date().toISOString(), buyerId: 'b4', buyerUsername: 'buyer4', isBuyerMuted: false };
+  await receiveDetails({ requestId: id, fields: { 'Current Rank': 'Gold IV', 'Desired Rank': 'Gold I', Server: 'EUW', 'Completion Method': 'Solo' }, fast: true, item: item as any });
+  const opener = db.prepare(`SELECT image FROM outbox WHERE request_id = ? AND kind = 'opener'`).get(id) as any;
+  assert.equal(opener?.image, 'opener:lol');
+});

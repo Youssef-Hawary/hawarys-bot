@@ -120,8 +120,7 @@
     return session;
   }
 
-  async function sendChat(conversationId, text) {
-    const session = await chatSession();
+  async function sendText(session, conversationId, text) {
     // Newer TalkJS SDK: session.conversation(id).send(text). Older: getOrCreateConversation(id).sendMessage(text).
     if (typeof session.conversation === 'function') {
       const ref = session.conversation(conversationId);
@@ -132,6 +131,33 @@
     await conv.sendMessage(text);
   }
 
+  /** Uploads an image to TalkJS and sends it as a file message (like attaching a picture in the chat). */
+  async function sendImage(session, conversationId, image) {
+    const bin = atob(image.b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: image.mime });
+    let fileToken;
+    if (typeof session.uploadImage === 'function') {
+      const bmp = await createImageBitmap(blob).catch(() => null);
+      fileToken = await session.uploadImage(blob, { filename: image.name, ...(bmp ? { width: bmp.width, height: bmp.height } : {}) });
+    } else if (typeof session.uploadFile === 'function') {
+      fileToken = await session.uploadFile(blob, { filename: image.name });
+    } else throw new Error('This chat version cannot upload images');
+    const ref = typeof session.conversation === 'function' ? session.conversation(conversationId) : null;
+    if (typeof ref?.send !== 'function') throw new Error('This chat version cannot send images');
+    await ref.send({ content: [{ type: 'file', fileToken }] });
+  }
+
+  async function sendChat(conversationId, text, image) {
+    const session = await chatSession();
+    if (text) await sendText(session, conversationId, text);
+    if (image) {
+      try { await sendImage(session, conversationId, image); }
+      catch (err) { throw new Error(`${text ? 'Text sent, but the image failed' : 'Image failed'}: ${err?.message || err}`); }
+    }
+  }
+
   window.addEventListener('message', async e => {
     if (e.source !== window || !e.data || typeof e.data.__hb !== 'string') return;
     const { __hb: kind, id } = e.data;
@@ -139,7 +165,7 @@
     if (kind === 'probe-chat') window.postMessage({ __hb: 'probe-chat-result', id, ok: true }, location.origin);
     if (kind === 'send-chat') {
       try {
-        await sendChat(e.data.conversationId, e.data.text);
+        await sendChat(e.data.conversationId, e.data.text, e.data.image);
         window.postMessage({ __hb: 'send-chat-result', id, ok: true }, location.origin);
       } catch (err) {
         chat = null; // start a fresh session next time
