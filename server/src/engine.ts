@@ -11,7 +11,7 @@ export const bus = new EventEmitter();
 bus.setMaxListeners(100);
 
 export type BotSettings = { running: boolean; dryRun: boolean; pollSeconds: number; maxOffersPerHour: number; syncOnlineStatus: boolean; deadlineAlertHours: number };
-export const getBot = () => getSetting<BotSettings>('bot', { running: false, dryRun: true, pollSeconds: 20, maxOffersPerHour: 30, syncOnlineStatus: false, deadlineAlertHours: 2 });
+export const getBot = () => getSetting<BotSettings>('bot', { running: false, dryRun: true, pollSeconds: 10, maxOffersPerHour: 30, syncOnlineStatus: false, deadlineAlertHours: 2 });
 
 export type Template = { enabled: boolean; text: string };
 export type Messages = {
@@ -291,6 +291,22 @@ async function tick() {
     }
     if (now() - lastOutcomes >= 5 * 60_000) { lastOutcomes = now(); await safe('offer results', pollOutcomes); }
   } finally { busy = false; }
+}
+
+/** Checks Eldorado for new requests right now. Called when the extension sees Eldorado's live
+ * "BoostingRequestCreated" notification, so the bot reacts in about a second instead of waiting for the next poll. */
+let pollingNow: Promise<number> | null = null;
+export function pollNow(): Promise<number> {
+  if (!getBot().running || !hasCreds()) return Promise.resolve(0);
+  pollingNow ??= (async () => {
+    try {
+      lastPoll = now();
+      const before = (db.prepare(`SELECT COUNT(*) AS n FROM requests WHERE status = 'needs_details'`).get() as { n: number }).n;
+      await safe('requests', pollRequests);
+      return (db.prepare(`SELECT COUNT(*) AS n FROM requests WHERE status = 'needs_details'`).get() as { n: number }).n - before;
+    } finally { pollingNow = null; }
+  })();
+  return pollingNow;
 }
 
 export function startEngine() {

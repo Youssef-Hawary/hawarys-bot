@@ -42,7 +42,7 @@ export function SettingsPage() {
                 hint={s.bot.dryRun ? 'Safe mode: the bot only shows what it WOULD offer.' : 'LIVE: real offers are being sent on Eldorado.'} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Check Eldorado every (seconds)" hint="20–60 is safe"><Num min={10} value={s.bot.pollSeconds} onChange={v => set(x => { x.bot.pollSeconds = Math.max(10, v); })} /></Field>
+              <Field label="Backup check every (seconds)" hint="New requests are caught instantly from Eldorado's live feed while an Eldorado tab is open. This is only the backup."><Num min={5} value={s.bot.pollSeconds} onChange={v => set(x => { x.bot.pollSeconds = Math.max(5, v); })} /></Field>
               <Field label="Max offers per hour" hint="Safety cap"><Num value={s.bot.maxOffersPerHour} onChange={v => set(x => { x.bot.maxOffersPerHour = v; })} /></Field>
               <Field label="Deadline alert (hours before)"><Num value={s.bot.deadlineAlertHours} onChange={v => set(x => { x.bot.deadlineAlertHours = v; })} /></Field>
             </div>

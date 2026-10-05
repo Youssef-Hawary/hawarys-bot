@@ -55,6 +55,17 @@ let timer;
 new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(check, 600); }).observe(document.documentElement, { childList: true, subtree: true });
 setTimeout(check, 1500);
 
+// Live feed (page → background): a new boosting request was just created.
+let lastEvent = 0;
+window.addEventListener('message', e => {
+  if (e.source !== window || e.data?.__hb !== 'boosting-event' || Date.now() - lastEvent < 300) return;
+  lastEvent = Date.now();
+  chrome.runtime.sendMessage({ type: 'boosting-event' }).catch(() => {});
+});
+// Keeps the background worker awake and checking every few seconds while an Eldorado tab is open
+// (Chrome's own timers can't run more often than every 30 seconds).
+setInterval(() => chrome.runtime.sendMessage({ type: 'wake' }).catch(() => {}), 4000);
+
 // Recorder relay (page → background)
 window.addEventListener('message', e => {
   if (e.source === window && e.data?.__hb === 'capture') chrome.runtime.sendMessage({ type: 'capture', data: e.data.data }).catch(() => {});
@@ -77,6 +88,7 @@ function askPage(kind, payload, timeoutMs = 15000) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === 'probe-chat') { askPage('probe-chat', {}, 3000).then(reply); return true; }
+  if (msg.type === 'fetch-details') { fetchDetails(msg.requestId).then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'create-keys') { createKeys().then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'send-chat') { askPage('send-chat', { conversationId: msg.conversationId, text: msg.text }).then(reply); return true; }
   if (msg.type === 'read-now') { lastSent = ''; check(); reply({ ok: true }); }
@@ -99,4 +111,33 @@ async function createKeys() {
   const detail = (d.messages && d.messages.join(' ')) || d.message || d.title || text.slice(0, 160);
   const sent = Object.keys(headers).join(', ');
   throw new Error(`Eldorado said HTTP ${res.status}: ${detail || 'no details'} [headers sent: ${sent}]`);
+}
+
+// Reads a boosting request through Eldorado's own API (the same call its request page makes).
+// Returns label → value fields like { "Current Rank": "Platinum I", "Server": "EU" }.
+async function fetchDetails(requestId) {
+  const { headers = {} } = await askPage('site-headers', {}, 3000);
+  let last = '';
+  for (const path of [`/api/boostingOffers/boostingRequests/${requestId}/details`, `/api/boostingOffers/boostingRequests/${requestId}`]) {
+    const res = await fetch(path, { credentials: 'include', headers: { ...headers, Accept: 'application/json, text/plain, */*' } });
+    const text = await res.text();
+    if (!res.ok) { last = `HTTP ${res.status} ${text.slice(0, 120)}`; continue; }
+    let d; try { d = JSON.parse(text); } catch { last = 'not JSON'; continue; }
+    const root = d.boostingRequest ?? d.data ?? d;
+    const details = root.boostingRequestDetails ?? root.details ?? root;
+    const values = details.descriptionValues ?? root.descriptionValues;
+    if (!Array.isArray(values)) { last = `no descriptionValues (keys: ${Object.keys(root).join(',')})`; continue; }
+    const fields = {}, options = [];
+    for (const v of values) {
+      const label = String(v.label ?? v.name ?? v.title ?? '').trim();
+      const value = Array.isArray(v.value) ? v.value.map(x => x?.label ?? x?.value ?? x).join(', ') : String(v.value ?? '').trim();
+      if (!label) continue;
+      if (value === 'Yes') options.push(label); else if (value && value !== 'No') fields[label] = value;
+    }
+    // "Yes" options (Stream, Offline Mode, ...) go into the description so modifiers can match them.
+    if (options.length) fields.Description = [fields.Description, `Options: ${options.join(', ')}`].filter(Boolean).join(' | ');
+    const buyer = root.buyerInfo?.username ?? root.buyerInfo?.userName ?? root.buyerUsername ?? null;
+    return { ok: true, fields, buyer };
+  }
+  return { ok: false, error: last };
 }

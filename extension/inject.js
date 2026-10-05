@@ -65,6 +65,20 @@
     return send.apply(this, arguments);
   };
 
+  // ---- live feed ----
+  // Eldorado pushes notifications over a SignalR WebSocket. "BoostingRequestCreated" = a new request for us.
+  const NativeWS = window.WebSocket;
+  window.WebSocket = class extends NativeWS {
+    constructor(...args) {
+      super(...args);
+      try {
+        this.addEventListener('message', e => {
+          if (typeof e.data === 'string' && e.data.includes('BoostingRequestCreated')) window.postMessage({ __hb: 'boosting-event' }, location.origin);
+        });
+      } catch { /* never break the page */ }
+    }
+  };
+
   // ---- chat bridge ----
   function findTalkSession() {
     const seen = new Set();

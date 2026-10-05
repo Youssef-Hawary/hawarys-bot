@@ -60,7 +60,8 @@ D. CONNECT ELDORADO (only once)
 2. Click the extension, then "Connect Eldorado API (owner)".
    You should see:  Eldorado API connected
 
-3. Open any one boosting request on Eldorado, so the bot learns where request pages are.
+3. Keep one Eldorado tab open. The extension listens to Eldorado's live notifications,
+   so new requests are picked up within about a second.
 
 
 E. TEST WITHOUT RISK (dry run)

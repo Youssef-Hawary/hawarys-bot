@@ -5,6 +5,7 @@ let captures = [];
 let reader = null;          // { windowId, tabId } hidden window used to open request pages
 const waiting = new Map();  // requestId → resolve()
 let ticking = false;
+let again = false;      // something happened while a tick was running: run once more right after
 
 const store = keys => chrome.storage.local.get(keys);
 const save = obj => chrome.storage.local.set(obj);
@@ -59,6 +60,26 @@ async function readRequests(template, ids) {
   if (reader) { chrome.windows.remove(reader.windowId).catch(() => {}); reader = null; }
 }
 
+/** Reads request details through Eldorado's API from a normal Eldorado tab. Returns the ids it couldn't read. */
+async function fetchAllDetails(ids, tabs) {
+  if (!ids.length) return [];
+  if (!tabs.length) { await call('/ext/report', { message: `${ids.length} request(s) waiting, but no Eldorado tab is open in Chrome` }).catch(() => {}); return ids; }
+  const left = [];
+  for (const requestId of ids) {
+    let r;
+    try { r = await chrome.tabs.sendMessage(tabs[0].id, { type: 'fetch-details', requestId }); }
+    catch { r = { ok: false, error: 'Eldorado tab not ready. Reload it (F5).' }; }
+    if (r?.ok) {
+      const res = await call('/ext/request-details', { requestId, fields: r.fields, buyer: r.buyer }).catch(() => null);
+      await save({ lastDetails: { at: Date.now(), fields: r.fields, result: res } });
+    } else {
+      left.push(requestId);
+      await call('/ext/report', { message: `Couldn't read request ${requestId.slice(0, 8)}: ${r?.error}` }).catch(() => {});
+    }
+  }
+  return left;
+}
+
 async function flushCaptures() {
   if (!captures.length) return;
   const batch = captures.splice(0, 50);
@@ -66,8 +87,9 @@ async function flushCaptures() {
 }
 
 async function tick() {
-  if (ticking) return;
+  if (ticking) { again = true; return; }
   ticking = true;
+  again = false;
   try {
     const { token } = await store('token');
     if (!token) return;
@@ -80,7 +102,8 @@ async function tick() {
     if (hb.leader) {
       const pending = await call(`/ext/pending-details?clientId=${id}`);
       status.pendingDetails = pending.ids.length;
-      if (pending.template && pending.ids.length) await readRequests(pending.template, pending.ids);
+      const left = await fetchAllDetails(pending.ids, tabs);
+      if (pending.template && left.length) await readRequests(pending.template, left);
 
       const chatTab = await chatCapableTab();
       status.chatReady = !!chatTab;
@@ -98,7 +121,15 @@ async function tick() {
     await save({ status: { ok: false, at: Date.now(), error: String(e.message || e) } });
   } finally {
     ticking = false;
+    if (again) tick();
   }
+}
+
+/** Eldorado's live feed announced a new request: make the server check now, then read details at once. */
+let lastWake = 0;
+async function onBoostingEvent() {
+  try { await call('/ext/poke', {}); } catch { /* not connected */ }
+  tick();
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -130,6 +161,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     })().then(r => reply({ ok: true, ...r }), e => reply({ ok: false, error: String(e.message || e) }));
     return true;
   }
+  if (msg.type === 'boosting-event') onBoostingEvent();
+  if (msg.type === 'wake' && Date.now() - lastWake > 3500) { lastWake = Date.now(); tick(); }
   if (msg.type === 'tick') { tick().then(() => reply({ ok: true })); return true; }
 });
 

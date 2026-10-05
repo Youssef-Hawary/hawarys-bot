@@ -20,8 +20,7 @@ async function render() {
   $('toggle').className = status?.running ? 'danger' : 'primary';
 
   const lines = [];
-  if (!status?.template) lines.push('👉 Open any boosting request on Eldorado once so the bot learns where request pages live.');
-  else if (status?.pendingDetails) lines.push(`Reading ${status.pendingDetails} new request(s)…`);
+  if (status?.pendingDetails) lines.push(`Reading ${status.pendingDetails} new request(s)…`);
   if (lastDetails) {
     const f = lastDetails.fields || {};
     const res = lastDetails.result;

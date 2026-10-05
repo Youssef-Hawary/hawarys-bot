@@ -10,6 +10,7 @@ import { getDiscord, sendDiscord } from './discord.ts';
 import { analytics, workerSummary, workerPay, getFees, LIVE_STATES, type OrderRow } from './money.ts';
 import {
   bus, log, changed, getBot, getMessages, setRunning, receiveDetails, heartbeat, liveClients, outboxFor, outboxResult, fill, isLeader,
+  pollNow,
 } from './engine.ts';
 
 type Env = { Variables: { user: User; token: string } };
@@ -471,6 +472,19 @@ api.post('/ext/eldorado-keys', ownerOnly, async c => {
   changed('bot');
   try { await eldorado.testToken(); return c.json({ tested: true }); }
   catch (e) { return c.json({ tested: false, testError: (e as Error).message }); }
+});
+
+// Eldorado's live feed said a new boosting request was created: check right away.
+api.post('/ext/poke', async c => c.json({ fresh: await pollNow() }));
+
+// The extension reports problems here so they show up in the Activity log.
+const lastReports = new Map<string, number>();
+api.post('/ext/report', async c => {
+  const { message } = await c.req.json();
+  const msg = String(message ?? '').slice(0, 300);
+  const key = msg.replace(/[0-9a-f]{8}/g, '');
+  if (msg && Date.now() - (lastReports.get(key) ?? 0) > 120_000) { lastReports.set(key, Date.now()); log('warn', `🧩 Extension (${c.get('user').display_name}): ${msg}`); }
+  return c.json({ ok: true });
 });
 
 api.post('/ext/request-details', async c => {
