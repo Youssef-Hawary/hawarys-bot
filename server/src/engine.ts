@@ -11,7 +11,7 @@ export const bus = new EventEmitter();
 bus.setMaxListeners(100);
 
 export type BotSettings = { running: boolean; dryRun: boolean; pollSeconds: number; maxOffersPerHour: number; syncOnlineStatus: boolean; deadlineAlertHours: number };
-export const getBot = () => getSetting<BotSettings>('bot', { running: false, dryRun: true, pollSeconds: 10, maxOffersPerHour: 30, syncOnlineStatus: false, deadlineAlertHours: 2 });
+export const getBot = () => getSetting<BotSettings>('bot', { running: false, dryRun: true, pollSeconds: 10, maxOffersPerHour: 200, syncOnlineStatus: false, deadlineAlertHours: 2 });
 
 export type Template = { enabled: boolean; text: string };
 export type Messages = {
@@ -363,6 +363,12 @@ async function checkSubscriptions() {
 }
 
 export function startEngine() {
+  // The default hourly offer limit went from 30 to 200; move saved settings still on the old default (once).
+  if (!getSetting('migrated:maxOffers200', false)) {
+    const bot = getBot();
+    if (bot.maxOffersPerHour === 30) setSetting('bot', { ...bot, maxOffersPerHour: 200 });
+    setSetting('migrated:maxOffers200', true);
+  }
   // Requests dropped in the last 2 hours because the game wasn't recognised get another chance.
   db.prepare(`UPDATE requests SET status = 'needs_details', reason = NULL, game = NULL
               WHERE status = 'skipped' AND reason LIKE 'not Valorant/LoL%' AND seen_at > ?`).run(now() - 2 * 3600_000);

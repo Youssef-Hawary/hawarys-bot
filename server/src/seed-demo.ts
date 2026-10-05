@@ -81,6 +81,6 @@ const logs = ['🚀 Server started', '▶️ Bot started by Hawary', '📥 3 new
   '🛒 New order from NightOwl77', '🙋 Ahmed took Valorant - Rank Boost', '💬 Sent accepted message', '📦 Omar delivered League of Legends - Rank Boost'];
 for (let i = 0; i < logs.length; i++) db.prepare('INSERT INTO logs (ts, level, msg) VALUES (?, ?, ?)').run(now - (logs.length - i) * 90_000, i % 4 === 3 ? 'success' : 'info', logs[i]);
 
-setSetting('bot', { running: true, dryRun: true, pollSeconds: 20, maxOffersPerHour: 30, syncOnlineStatus: false, deadlineAlertHours: 2 });
+setSetting('bot', { running: true, dryRun: true, pollSeconds: 20, maxOffersPerHour: 200, syncOnlineStatus: false, deadlineAlertHours: 2 });
 void deliveryEnum;
 console.log('Demo data ready in data/demo.db. Log in as hawary / demo1234 (owner) or ahmed / demo1234 (worker).');
