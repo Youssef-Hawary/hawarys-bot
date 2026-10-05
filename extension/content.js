@@ -101,18 +101,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 async function createKeys() {
   const { headers = {} } = await askPage('site-headers', {}, 3000);
   if (!Object.keys(headers).length) throw new Error('Eldorado hasn\'t loaded yet. Click around on Eldorado for a few seconds (e.g. open your notifications), then try again.');
-  const res = await fetch('/api/client-credentials', {
-    method: 'POST', credentials: 'include',
-    headers: { ...headers, 'Content-Type': 'application/json', Accept: 'application/json, text/plain, */*' },
-    body: JSON.stringify({ name: `hawarys-bot-${new Date().toISOString().slice(0, 10)}`, expiration: '365.00:00:00' }),
-  });
+  const opts = method => ({ method, credentials: 'include', headers: { ...headers, 'Content-Type': 'application/json', Accept: 'application/json, text/plain, */*' } });
+  const create = () => fetch('/api/client-credentials', { ...opts('POST'), body: JSON.stringify({ name: `hawarys-bot-${new Date().toISOString().slice(0, 10)}`, expiration: '365.00:00:00' }) });
+
+  // Eldorado allows only a few API keys per account. Remove the old ones this bot made (named hawarys-bot-…
+  // or seller-bot from the first version) before making a new one. Keys with other names are never touched.
+  const list = await fetch('/api/client-credentials', opts('GET')).then(r => r.ok ? r.json() : []).catch(() => []);
+  const items = Array.isArray(list) ? list : list.results ?? list.data ?? list.items ?? [];
+  const ours = items.filter(k => /^(hawarys-bot|seller-bot)/i.test(String(k.name ?? k.clientName ?? '')));
+  for (const k of ours) {
+    const id = k.id ?? k.clientCredentialId ?? k.credentialId ?? k.clientId;
+    if (id) await fetch(`/api/client-credentials/${encodeURIComponent(id)}`, opts('DELETE')).catch(() => {});
+  }
+
+  const res = await create();
   const text = await res.text();
   let d = {}; try { d = JSON.parse(text); } catch { /* not JSON */ }
   const clientId = d.clientId ?? d.data?.clientId, clientSecret = d.clientSecret ?? d.data?.clientSecret;
   if (res.ok && clientId && clientSecret) return { ok: true, clientId, clientSecret };
   const detail = (d.messages && d.messages.join(' ')) || d.message || d.title || text.slice(0, 160);
-  const sent = Object.keys(headers).join(', ');
-  throw new Error(`Eldorado said HTTP ${res.status}: ${detail || 'no details'} [headers sent: ${sent}]`);
+  const names = items.map(k => k.name ?? k.clientName ?? '?').join(', ');
+  throw new Error(`Eldorado said HTTP ${res.status}: ${detail || 'no details'}` + (items.length ? ` · Your API keys on Eldorado: ${names || items.length}` : ''));
 }
 
 // Reads a boosting request through Eldorado's own API (the same call its request page makes).

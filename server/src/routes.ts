@@ -500,6 +500,13 @@ api.post('/ext/heartbeat', async c => {
   return c.json({ leader, recording: getSetting('recording', false), running: getBot().running, template: getSetting('requestUrlTemplate', null), user: { name: user.display_name, role: user.role } });
 });
 
+// Before making new keys, the extension asks whether the current ones still work (Eldorado allows only a few keys).
+api.post('/ext/eldorado-status', ownerOnly, async c => {
+  if (!hasCreds()) return c.json({ ok: false, clientId: null });
+  try { await eldorado.testToken(); return c.json({ ok: true, clientId: getCreds().clientId }); }
+  catch (e) { return c.json({ ok: false, clientId: getCreds().clientId, error: (e as Error).message }); }
+});
+
 // The owner's extension creates Eldorado API keys from the logged-in Eldorado tab and hands them over here.
 api.post('/ext/eldorado-keys', ownerOnly, async c => {
   const { clientId, clientSecret } = await c.req.json();

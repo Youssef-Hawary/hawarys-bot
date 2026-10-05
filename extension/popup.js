@@ -56,7 +56,7 @@ $('keys').onclick = async () => {
   $('keys').disabled = true;
   $('keysMsg').textContent = 'Creating API keys on Eldorado…';
   const r = await chrome.runtime.sendMessage({ type: 'connect-eldorado' }).catch(e => ({ ok: false, error: e.message }));
-  $('keysMsg').textContent = r?.ok ? (r.tested ? '✅ Eldorado API connected.' : `Keys saved, but the test failed: ${r.testError}`) : `❌ ${r?.error || 'Failed'}`;
+  $('keysMsg').textContent = r?.ok ? (r.already ? '✅ Already connected. The current keys work, nothing to do.' : r.tested ? '✅ Eldorado API connected.' : `Keys saved, but the test failed: ${r.testError}`) : `❌ ${r?.error || 'Failed'}`;
   $('keys').disabled = false;
 };
 $('logout').onclick = async () => { await chrome.storage.local.set({ token: null, status: null }); render(); };

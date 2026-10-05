@@ -161,6 +161,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   }
   if (msg.type === 'connect-eldorado') {
     (async () => {
+      const current = await call('/ext/eldorado-status', {});
+      if (current.ok) return { tested: true, already: true };
       const [tab] = await eldoradoTabs();
       if (!tab) throw new Error('Open eldorado.gg in a tab and log in first');
       let keys;
