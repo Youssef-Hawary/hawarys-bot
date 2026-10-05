@@ -4,7 +4,7 @@ import { streamSSE } from 'hono/streaming';
 import { db, getSetting, setSetting, audit, now } from './db.ts';
 import { createSession, createUser, deleteSession, login, userCount, userFromToken, hashPassword, type User } from './auth.ts';
 import { GAMES, GAME_NAMES, TIERS, ladder, type Game } from './ranks.ts';
-import { REGIONS, POINTS_LABEL, getPricing, savePricing, defaultPricing, normalizeRequest, quote, type GamePricing } from './pricing.ts';
+import { REGIONS, REGION_NAMES, POINTS_LABEL, SERVICE_KEYS, SERVICE_INFO, getPricing, savePricing, defaultPricing, migratePricing, normalizeRequest, quote } from './pricing.ts';
 import { eldorado, getCreds, hasCreds } from './eldorado.ts';
 import { getDiscord, sendDiscord } from './discord.ts';
 import { analytics, workerSummary, workerPay, getFees, LIVE_STATES, type OrderRow } from './money.ts';
@@ -281,14 +281,15 @@ api.get('/pricing', c => c.json({
   games: Object.fromEntries(GAMES.map(g => [g, getPricing(g)])),
   meta: Object.fromEntries(GAMES.map(g => [g, {
     name: GAME_NAMES[g], tiers: TIERS[g].map(t => t.name), ranks: ladder(g).map(r => r.label), regions: REGIONS[g], points: POINTS_LABEL[g],
+    regionNames: Object.fromEntries(REGIONS[g].map(r => [r, REGION_NAMES[r] ?? r])),
+    services: SERVICE_KEYS.map(k => ({ key: k, ...SERVICE_INFO[k] })),
   }])),
 }));
 
 api.put('/pricing/:game', async c => {
   const game = c.req.param('game') as Game;
   if (!GAMES.includes(game)) return c.json({ error: 'Unknown game' }, 404);
-  const body = await c.req.json() as GamePricing;
-  savePricing(game, body);
+  savePricing(game, migratePricing(game, await c.req.json()));
   audit(c.get('user').id, 'pricing.save', { game });
   log('info', `💲 ${c.get('user').display_name} updated ${GAME_NAMES[game]} pricing`);
   changed('pricing');
@@ -306,7 +307,7 @@ api.post('/pricing/:game/reset', c => {
 api.post('/pricing/:game/quote', async c => {
   const game = c.req.param('game') as Game;
   const { fields, category, pricing } = await c.req.json();
-  return c.json(quote(normalizeRequest(game, category ?? 'Rank Boost', fields ?? {}), pricing ?? getPricing(game)));
+  return c.json(quote(normalizeRequest(game, category ?? 'Rank Boost', fields ?? {}), pricing ? migratePricing(game, pricing) : getPricing(game)));
 });
 
 // ---------------- messages ----------------

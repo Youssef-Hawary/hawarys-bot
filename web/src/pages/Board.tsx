@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import { Hand, PackageCheck, Timer, UserRound, Undo2, XCircle, Inbox, CheckCheck, Truck, Flame, MoreHorizontal } from 'lucide-react';
 import { api, timeLeft, useData, usd, ago } from '../api.ts';
 import { Avatar, Badge, Button, Card, Field, GameBadge, Modal, PageHeader, Tabs, Toggle, clsx, useAction } from '../components/ui.tsx';
@@ -44,7 +43,7 @@ export function Board() {
       <PageHeader title="Order board" subtitle="Take an order to make it yours. Everyone sees who is working on what."
         actions={<>
           <Tabs value={game} onChange={setGame} tabs={[{ id: 'all', label: 'All' }, { id: 'valorant', label: 'Valorant' }, { id: 'lol', label: 'LoL' }]} />
-          <div className="rounded-xl bg-ink-900/70 px-3 py-1.5 ring-1 ring-white/[.06]"><Toggle checked={mine} onChange={setMine} label={<span className="text-[13px]">Only mine</span>} /></div>
+          <div className="rounded-[8px] border border-white/[.07] bg-black/30 px-3 py-0.5"><Toggle checked={mine} onChange={setMine} label={<span className="text-[13px]">Only mine</span>} /></div>
         </>} />
 
       <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
@@ -52,23 +51,22 @@ export function Board() {
           const items = orders.filter(col.test).sort((a, b) => col.id === 'done' || col.id === 'delivered' ? b.created_at - a.created_at : (a.deadline ?? 9e15) - (b.deadline ?? 9e15));
           const shown = col.id === 'done' ? items.slice(0, 20) : items;
           return (
-            <div key={col.id} className="flex min-h-[200px] flex-col rounded-[20px] bg-ink-900/40 p-3 ring-1 ring-white/[.05] backdrop-blur-md">
+            <div key={col.id} className="flex min-h-[200px] flex-col rounded-[10px] border border-white/[.06] bg-ink-900/80 p-2.5">
               <div className="mb-3 flex items-center gap-2 px-1">
-                <span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: `${col.tone}22`, color: col.tone }}><col.icon size={15} /></span>
-                <span className="font-bold">{col.title}</span>
-                <span className="ml-auto rounded-full bg-white/[.06] px-2 text-[12px] font-bold text-fg-2">{items.length}</span>
+                <span className="h-3 w-[3px] rounded-sm" style={{ background: col.tone }} />
+                <span className="text-[12px] font-bold uppercase tracking-[.12em]">{col.title}</span>
+                <span className="num ml-auto rounded-[5px] border border-white/[.08] bg-black/30 px-1.5 text-[12px] text-fg-2">{items.length}</span>
               </div>
               <div className="flex flex-col gap-2.5">
-                <AnimatePresence initial={false}>
-                  {shown.map(o => {
+                {shown.map(o => {
                     const left = timeLeft(o.deadline);
                     const isMine = o.assignee?.id === me.id;
                     return (
-                      <motion.div key={o.id} layout initial={{ opacity: 0, scale: .96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .9 }} transition={{ type: 'spring', stiffness: 400, damping: 32 }}>
-                        <Card hover className={clsx('cursor-pointer p-3.5', isMine && 'neon-ring')} onClick={() => setOpen(o)}>
+                      <div key={o.id}>
+                        <Card hover className={clsx('cursor-pointer p-3.5', isMine && '!border-neon/45')} onClick={() => setOpen(o)}>
                           <div className="flex items-center justify-between gap-2">
                             <GameBadge game={o.game} />
-                            <span className="text-[15px] font-extrabold">{usd(o.price)}</span>
+                            <span className="num text-[15px] font-semibold">{usd(o.price)}</span>
                           </div>
                           <div className="mt-2 line-clamp-2 text-[14px] font-semibold leading-snug">{o.title.replace(/^.*? - /, '')}</div>
                           <div className="mt-1 text-[12px] text-fg-3">by {o.buyer} · {ago(o.created_at)}</div>
@@ -81,15 +79,14 @@ export function Board() {
                           </div>
                           {o.state === 'Paid' && !o.assignee && (
                             <Button variant="primary" size="sm" className="mt-3 w-full" icon={<Hand size={14} />} loading={busy === `take-${o.id}`}
-                              onClick={e => { e.stopPropagation(); act(`take-${o.id}`, `/orders/${o.id}/take`, {}, 'Order is yours. Go get it!'); }}>
+                              onClick={e => { e.stopPropagation(); act(`take-${o.id}`, `/orders/${o.id}/take`, {}, 'Order assigned to you'); }}>
                               Take it
                             </Button>
                           )}
                         </Card>
-                      </motion.div>
+                      </div>
                     );
                   })}
-                </AnimatePresence>
                 {items.length === 0 && <div className="grid place-items-center gap-1 py-8 text-[13px] text-fg-3"><Inbox size={20} />Nothing here</div>}
               </div>
             </div>
@@ -152,35 +149,33 @@ function OrderModal({ order: o, onClose, owner, meId, team, busy, act }: {
         </div>
       )}
 
-      <AnimatePresence>
-        {panel === 'cancel' && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <div className="mt-4 space-y-3 rounded-xl bg-bad/[.06] p-4 ring-1 ring-bad/20">
+      {panel === 'cancel' && (
+          <div>
+            <div className="mt-4 space-y-3 rounded-[8px] border border-bad/25 bg-bad/[.05] p-4">
               <Field label="Reason (sent to Eldorado)">
                 <select className="field" value={reason} onChange={e => setReason(e.target.value)}>{CANCEL_REASONS.map(r => <option key={r} value={r}>{human(r)}</option>)}</select>
               </Field>
               <Field label="Message to buyer (optional)"><input className="field" value={message} onChange={e => setMessage(e.target.value)} /></Field>
               <Button variant="danger" className="w-full" loading={busy === 'cancel'} onClick={() => act('cancel', `/orders/${o.id}/cancel`, { reason, message }, 'Order canceled')}>Yes, cancel this order on Eldorado</Button>
             </div>
-          </motion.div>
+          </div>
         )}
         {panel === 'extend' && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-white/[.03] p-4 ring-1 ring-white/10">
+          <div>
+            <div className="well mt-4 grid grid-cols-2 gap-3 p-4">
               <Field label="Add time"><select className="field" value={ext.time} onChange={e => setExt({ ...ext, time: e.target.value })}>{EXTEND_TIMES.map(t => <option key={t} value={t}>{human(t)}</option>)}</select></Field>
               <Field label="Reason"><select className="field" value={ext.reason} onChange={e => setExt({ ...ext, reason: e.target.value })}>{EXTEND_REASONS.map(t => <option key={t} value={t}>{human(t)}</option>)}</select></Field>
               <Button className="col-span-2" loading={busy === 'extend'} onClick={() => act('extend', `/orders/${o.id}/extend`, ext, 'Delivery time extended')}>Extend on Eldorado</Button>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
       {o.state !== 'Paid' && <p className="mt-5 flex items-center gap-2 text-[13px] text-fg-3"><MoreHorizontal size={14} /> This order is {o.state.toLowerCase()}; nothing left to do.</p>}
     </Modal>
   );
 }
 
 const Info = ({ label, value }: { label: string; value: React.ReactNode }) => (
-  <div className="rounded-xl bg-white/[.03] px-3 py-2 ring-1 ring-white/[.05]">
+  <div className="well px-3 py-2">
     <div className="text-[12px] text-fg-3">{label}</div>
     <div className="font-semibold">{value}</div>
   </div>

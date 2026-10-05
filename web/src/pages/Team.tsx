@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { motion } from 'motion/react';
 import { UserPlus, Pencil, HandCoins, History } from 'lucide-react';
 import { api, useData, usd } from '../api.ts';
 import { Avatar, Badge, Button, Card, Field, Modal, Num, PageHeader, Toggle, clsx, useAction } from '../components/ui.tsx';
@@ -26,8 +25,8 @@ export function Team() {
         actions={<Button variant="primary" icon={<UserPlus size={16} />} onClick={() => setAdding(true)}>Add worker</Button>} />
 
       <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-        {(data ?? []).map((u, i) => (
-          <motion.div key={u.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .06 }}>
+        {(data ?? []).map(u => (
+          <div key={u.id}>
             <Card hover className={clsx('p-5', !u.active && 'opacity-50')}>
               <div className="flex items-center gap-3">
                 <Avatar name={u.display_name} color={u.color} size={44} />
@@ -54,7 +53,7 @@ export function Team() {
                 </div>
               </>)}
             </Card>
-          </motion.div>
+          </div>
         ))}
       </div>
 
@@ -77,7 +76,7 @@ export function Team() {
 }
 
 const Mini = ({ label, value, tone = '' }: { label: string; value: React.ReactNode; tone?: string }) => (
-  <div className="rounded-xl bg-white/[.03] px-2 py-2 ring-1 ring-white/[.05]"><div className={clsx('font-extrabold', tone)}>{value}</div><div className="text-[11px] text-fg-3">{label}</div></div>
+  <div className="well px-2 py-2"><div className={clsx('num font-semibold', tone)}>{value}</div><div className="text-[11px] text-fg-3">{label}</div></div>
 );
 
 function PayFields({ v, set }: { v: { payType: string; payValue: number }; set: (p: Partial<{ payType: string; payValue: number }>) => void }) {
@@ -88,7 +87,7 @@ function PayFields({ v, set }: { v: { payType: string; payValue: number }; set: 
         <div className="grid grid-cols-2 gap-2">
           {PAY_TYPES.map(p => (
             <button key={p.id} type="button" onClick={() => set({ payType: p.id })}
-              className={clsx('rounded-xl px-3 py-2 text-left text-sm font-semibold ring-1 transition', v.payType === p.id ? 'bg-neon/15 text-neon ring-neon/50' : 'bg-white/[.03] text-fg-2 ring-white/10 hover:ring-white/20')}>{p.label}</button>
+              className={clsx('rounded-[7px] border px-3 py-2 text-left text-sm font-semibold transition-colors', v.payType === p.id ? 'border-neon/50 bg-neon/10 text-neon' : 'border-white/10 bg-white/[.03] text-fg-2 hover:border-white/20')}>{p.label}</button>
           ))}
         </div>
       </Field>

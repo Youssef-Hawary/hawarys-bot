@@ -21,12 +21,12 @@ export function Analytics() {
         actions={<Tabs value={days} onChange={setDays} tabs={[{ id: '7', label: '7d' }, { id: '30', label: '30d' }, { id: '90', label: '90d' }, { id: '365', label: '1y' }]} />} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 2xl:grid-cols-6">
-        <Stat icon={<DollarSign size={22} />} label="Revenue (money in)" value={<CountUp value={t.revenue ?? 0} format={n => usd(n)} />} sub={`${t.orders ?? 0} orders`} />
-        <Stat delay={.04} tone="warn" icon={<Landmark size={22} />} label={`Eldorado fees (${a?.fees?.eldoradoFeePct ?? 0}%)`} value={<CountUp value={t.fees ?? 0} format={n => usd(n)} />} />
-        <Stat delay={.08} tone="violet" icon={<Users size={22} />} label="Worker pay (money out)" value={<CountUp value={t.workerPay ?? 0} format={n => usd(n)} />} />
-        <Stat delay={.12} tone="ok" icon={<TrendingUp size={22} />} label="Your profit" value={<CountUp value={t.profit ?? 0} format={n => usd(n)} />} />
-        <Stat delay={.16} icon={<Send size={22} />} label="Offers sent" value={<CountUp value={t.offers ?? 0} />} />
-        <Stat delay={.2} tone="ok" icon={<Trophy size={22} />} label="Offer win rate" value={t.winRate == null ? '–' : <CountUp value={t.winRate} format={n => `${Math.round(n)}%`} />} />
+        <Stat icon={<DollarSign size={16} />} label="Revenue (money in)" value={<CountUp value={t.revenue ?? 0} format={n => usd(n)} />} sub={`${t.orders ?? 0} orders`} />
+        <Stat tone="warn" icon={<Landmark size={16} />} label={`Eldorado fees (${a?.fees?.eldoradoFeePct ?? 0}%)`} value={<CountUp value={t.fees ?? 0} format={n => usd(n)} />} />
+        <Stat tone="violet" icon={<Users size={16} />} label="Worker pay (money out)" value={<CountUp value={t.workerPay ?? 0} format={n => usd(n)} />} />
+        <Stat tone="ok" icon={<TrendingUp size={16} />} label="Your profit" value={<CountUp value={t.profit ?? 0} format={n => usd(n)} />} />
+        <Stat icon={<Send size={16} />} label="Offers sent" value={<CountUp value={t.offers ?? 0} />} />
+        <Stat tone="ok" icon={<Trophy size={16} />} label="Offer win rate" value={t.winRate == null ? '–' : <CountUp value={t.winRate} format={n => `${Math.round(n)}%`} />} />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.6fr_1fr]">

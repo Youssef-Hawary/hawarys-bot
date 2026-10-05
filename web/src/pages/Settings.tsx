@@ -37,7 +37,7 @@ export function SettingsPage() {
 
         <Section title={<span className="flex items-center gap-2"><Bot size={16} /> Bot behavior</span>}>
           <div className="space-y-3">
-            <div className={clsx('rounded-xl p-3 ring-1', s.bot.dryRun ? 'bg-violet/10 ring-violet/30' : 'bg-ok/10 ring-ok/30')}>
+            <div className={clsx('rounded-[8px] border p-3', s.bot.dryRun ? 'border-violet/30 bg-violet/[.07]' : 'border-ok/30 bg-ok/[.07]')}>
               <Toggle checked={s.bot.dryRun} onChange={v => set(x => { x.bot.dryRun = v; })} label="Dry run"
                 hint={s.bot.dryRun ? 'Safe mode: the bot only shows what it WOULD offer.' : 'LIVE: real offers are being sent on Eldorado.'} />
             </div>
@@ -111,8 +111,8 @@ function ExtensionPanel({ s, ov, onRecord, busy }: { s: any; ov: any; onRecord: 
             ))}
           </div>
         </div>
-        <div className="rounded-2xl bg-white/[.02] p-4 ring-1 ring-white/[.06]">
-          <Toggle checked={!!s.recording} disabled={busy === 'rec'} onChange={onRecord} label={<span className="flex items-center gap-2">Recorder {s.recording && <span className="live-dot bg-bad" />}</span>}
+        <div className="well p-4">
+          <Toggle checked={!!s.recording} disabled={busy === 'rec'} onChange={onRecord} label={<span className="flex items-center gap-2">Recorder {s.recording && <span className="dot bg-bad" />}</span>}
             hint="Captures Eldorado's own network calls while you browse (no passwords or tokens) so we can wire up chat and new features. Turn off when done." />
           <div className="mt-3 flex items-center justify-between text-[13px] text-fg-3">
             <span>{caps?.length ?? 0} captured calls</span>

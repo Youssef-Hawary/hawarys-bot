@@ -24,11 +24,11 @@ export function Earnings() {
         actions={<Tabs value={days} onChange={setDays} tabs={[{ id: '7', label: '7d' }, { id: '30', label: '30d' }, { id: '90', label: '90d' }]} />} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <Stat icon={<Wallet size={22} />} tone="ok" label="Earned (all time)" value={<CountUp value={s?.earned ?? 0} format={n => usd(n)} />} />
-        <Stat delay={.05} icon={<HandCoins size={22} />} label="Paid out" value={<CountUp value={s?.paid ?? 0} format={n => usd(n)} />} />
-        <Stat delay={.1} icon={<PiggyBank size={22} />} tone="warn" label="Owed to you" value={<CountUp value={s?.owed ?? 0} format={n => usd(n)} />} />
-        <Stat delay={.15} icon={<Swords size={22} />} tone="violet" label="Orders done" value={<CountUp value={s?.ordersDone ?? 0} />} sub={`${s?.active ?? 0} in progress`} />
-        <Stat delay={.2} icon={<Layers size={22} />} label="Divisions boosted" value={<CountUp value={s?.divisionsDone ?? 0} />} />
+        <Stat icon={<Wallet size={16} />} tone="ok" label="Earned (all time)" value={<CountUp value={s?.earned ?? 0} format={n => usd(n)} />} />
+        <Stat icon={<HandCoins size={16} />} label="Paid out" value={<CountUp value={s?.paid ?? 0} format={n => usd(n)} />} />
+        <Stat icon={<PiggyBank size={16} />} tone="warn" label="Owed to you" value={<CountUp value={s?.owed ?? 0} format={n => usd(n)} />} />
+        <Stat icon={<Swords size={16} />} tone="violet" label="Orders done" value={<CountUp value={s?.ordersDone ?? 0} />} sub={`${s?.active ?? 0} in progress`} />
+        <Stat icon={<Layers size={16} />} label="Divisions boosted" value={<CountUp value={s?.divisionsDone ?? 0} />} />
       </div>
 
       {s && me.role !== 'owner' && <p className="mt-4 text-sm text-fg-3">Your pay: <b className="text-fg-2">{PAY_TEXT[s.payType]?.(s.payValue)}</b></p>}

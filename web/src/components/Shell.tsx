@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'motion/react';
 import {
   LayoutDashboard, KanbanSquare, Radar, BadgeDollarSign, MessageSquareText, Users, LineChart, Contact, ScrollText,
   Settings, Wallet, LogOut, Menu, X,
@@ -14,11 +13,11 @@ export const useMe = () => useContext(MeCtx);
 
 export function Logo({ size = 36 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden className="drop-shadow-[0_0_12px_rgb(56_198_244/.55)]">
-      <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#7FE3FF" /><stop offset="1" stopColor="#0E9AC9" /></linearGradient></defs>
-      <path d="M32 5 55.4 18.5v27L32 59 8.6 45.5v-27Z" fill="#11151C" stroke="url(#lg)" strokeWidth="3" strokeLinejoin="round" />
-      <path d="M23 21v22M41 21v22M23 32h18" stroke="url(#lg)" strokeWidth="5" strokeLinecap="round" />
-      <circle cx="32" cy="5" r="2.2" fill="#7FE3FF" /><circle cx="32" cy="59" r="2.2" fill="#7FE3FF" />
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden>
+      <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8FDDF8" /><stop offset="1" stopColor="#0E9AC9" /></linearGradient></defs>
+      <path d="M32 4 56 18v28L32 60 8 46V18Z" fill="#10141B" stroke="#2B3443" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M32 4 56 18v28L32 60 8 46V18Z" fill="none" stroke="url(#lg)" strokeWidth="2" strokeLinejoin="round" strokeDasharray="0 0" opacity=".55" />
+      <path d="M23 21v22M41 21v22M23 32h18" stroke="url(#lg)" strokeWidth="5" strokeLinecap="square" />
     </svg>
   );
 }
@@ -42,10 +41,10 @@ function BotPill() {
   const running = data?.bot?.running;
   const dry = data?.bot?.dryRun;
   return (
-    <div className={clsx('flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-semibold ring-1',
-      running ? 'bg-ok/10 text-ok ring-ok/30' : 'bg-white/5 text-fg-3 ring-white/10')}>
-      <span className={clsx('live-dot', running ? 'bg-ok' : 'bg-fg-3')} style={running ? undefined : { animation: 'none' }} />
-      {running ? (dry ? 'Running · dry run' : 'Running') : 'Stopped'}
+    <div className={clsx('flex items-center gap-2 rounded-[7px] border px-3 py-1.5 text-[12px] font-bold uppercase tracking-[.12em]',
+      running ? 'border-ok/30 bg-ok/[.07] text-ok' : 'border-white/10 bg-black/30 text-fg-3')}>
+      <span className={clsx('dot', running ? 'bg-ok' : 'bg-fg-3')} />
+      {running ? (dry ? 'Online · dry run' : 'Online') : 'Offline'}
     </div>
   );
 }
@@ -60,13 +59,12 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
     <nav className="flex flex-col gap-1">
       {items.map(({ to, label, icon: Icon }) => (
         <NavLink key={to} to={to} end={to === '/'} onClick={() => setOpen(false)}
-          className={({ isActive }) => clsx('group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-semibold transition',
-            isActive ? 'text-fg' : 'text-fg-3 hover:bg-white/[.04] hover:text-fg-2')}>
+          className={({ isActive }) => clsx('relative flex items-center gap-3 rounded-[7px] px-3 py-2 text-[14px] font-semibold transition-colors',
+            isActive ? 'bg-white/[.06] text-fg shadow-[inset_0_1px_0_rgb(255_255_255/.05)]' : 'text-fg-3 hover:bg-white/[.03] hover:text-fg-2')}>
           {({ isActive }) => (<>
-            {isActive && <motion.span layoutId="nav-active" className="absolute inset-0 rounded-xl bg-gradient-to-r from-neon/20 to-neon/[.02] ring-1 ring-neon/30" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
-            {isActive && <motion.span layoutId="nav-bar" className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-neon shadow-[0_0_12px_#38C6F4]" />}
-            <Icon size={18} className={clsx('relative', isActive && 'text-neon')} />
-            <span className="relative">{label}</span>
+            {isActive && <span className="absolute -left-4 top-1.5 bottom-1.5 w-[2px] bg-neon" />}
+            <Icon size={17} className={clsx(isActive && 'text-neon')} />
+            <span>{label}</span>
           </>)}
         </NavLink>
       ))}
@@ -77,61 +75,51 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
     <div className="flex items-center gap-3 px-2">
       <Logo />
       <div>
-        <div className="text-[17px] font-black leading-none tracking-tight">Hawary's <span className="text-neon text-glow">Bot</span></div>
-        <div className="mt-1 text-[11px] font-semibold uppercase tracking-[.2em] text-fg-3">Eldorado control</div>
+        <div className="text-[16px] font-extrabold leading-none tracking-tight">Hawary's <span className="text-neon">Bot</span></div>
+        <div className="mt-1 text-[10.5px] font-bold uppercase tracking-[.22em] text-fg-3">Eldorado control</div>
       </div>
     </div>
   );
 
   const userBox = (
-    <div className="flex items-center gap-3 rounded-2xl bg-white/[.03] p-2.5 ring-1 ring-white/[.06]">
+    <div className="flex items-center gap-3 rounded-[8px] border border-white/[.06] bg-black/25 p-2.5">
       <Avatar name={me.name} color={me.color} size={34} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-bold">{me.name}</div>
         <div className="text-[12px] capitalize text-fg-3">{me.role}</div>
       </div>
       <button title="Log out" aria-label="Log out" onClick={async () => { await api('/auth/logout', { method: 'POST' }); location.href = '/'; }}
-        className="rounded-lg p-2 text-fg-3 hover:bg-white/10 hover:text-bad"><LogOut size={16} /></button>
+        className="rounded-md p-2 text-fg-3 hover:bg-white/10 hover:text-bad"><LogOut size={16} /></button>
     </div>
   );
 
   return (
     <MeCtx.Provider value={me}>
-      <div className="min-h-screen lg:pl-[272px]">
+      <div className="min-h-screen lg:pl-[248px]">
         {/* desktop sidebar */}
-        <aside className="fixed inset-y-3 left-3 z-30 hidden w-[256px] flex-col gap-6 rounded-[22px] border border-white/[.06] bg-ink-900/55 p-4 backdrop-blur-xl lg:flex">
+        <aside className="fixed inset-y-0 left-0 z-30 hidden w-[248px] flex-col gap-6 border-r border-white/[.06] bg-ink-900/90 p-4 shadow-[1px_0_0_rgb(0_0_0/.6)] lg:flex">
           {brand}
           <div className="-mx-1 flex-1 overflow-y-auto px-1">{nav}</div>
           {userBox}
         </aside>
 
         {/* mobile drawer */}
-        <AnimatePresence>
-          {open && (<>
-            <motion.div className="fixed inset-0 z-40 bg-ink-950/70 backdrop-blur-sm lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setOpen(false)} />
-            <motion.aside initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }} transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-              className="fixed inset-y-0 left-0 z-50 flex w-[272px] flex-col gap-6 border-r border-white/10 bg-ink-900/95 p-4 lg:hidden">
-              <div className="flex items-center justify-between">{brand}<button onClick={() => setOpen(false)} aria-label="Close menu" className="p-2 text-fg-3"><X /></button></div>
-              <div className="flex-1 overflow-y-auto">{nav}</div>
-              {userBox}
-            </motion.aside>
-          </>)}
-        </AnimatePresence>
+        {open && (<>
+          <div className="fixed inset-0 z-40 bg-black/70 lg:hidden" onClick={() => setOpen(false)} />
+          <aside className="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col gap-6 border-r border-white/10 bg-ink-900 p-4 lg:hidden">
+            <div className="flex items-center justify-between">{brand}<button onClick={() => setOpen(false)} aria-label="Close menu" className="p-2 text-fg-3"><X /></button></div>
+            <div className="flex-1 overflow-y-auto">{nav}</div>
+            {userBox}
+          </aside>
+        </>)}
 
-        <header className="sticky top-0 z-20 flex items-center gap-3 px-4 py-3 backdrop-blur-md sm:px-6 lg:bg-transparent lg:backdrop-blur-none">
-          <button className="rounded-xl p-2 text-fg-2 ring-1 ring-white/10 lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu"><Menu size={20} /></button>
-          <div className="text-sm font-semibold text-fg-3 lg:hidden">{current.label}</div>
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/[.05] bg-ink-950/85 px-4 py-2.5 backdrop-blur sm:px-8">
+          <button className="rounded-md border border-white/10 p-2 text-fg-2 lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu"><Menu size={20} /></button>
+          <div className="text-[12px] font-bold uppercase tracking-[.14em] text-fg-3">{current.label}</div>
           <div className="ml-auto"><BotPill /></div>
         </header>
 
-        <main className="mx-auto max-w-[1400px] px-4 pb-16 sm:px-6">
-          <AnimatePresence mode="wait">
-            <motion.div key={loc.pathname} initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -6 }} transition={{ duration: .3, ease: [0.16, 1, 0.3, 1] }}>
-              {children}
-            </motion.div>
-          </AnimatePresence>
-        </main>
+        <main className="mx-auto max-w-[1440px] px-4 pb-16 pt-6 sm:px-8">{children}</main>
       </div>
     </MeCtx.Provider>
   );

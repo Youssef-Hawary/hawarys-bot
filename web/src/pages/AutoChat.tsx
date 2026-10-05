@@ -18,7 +18,7 @@ function MessageBox({ value, onChange, vars = VARS }: { value: string; onChange:
       <textarea ref={ref} rows={4} className="field resize-y font-mono text-[13.5px] leading-relaxed" value={value} onChange={e => onChange(e.target.value)} />
       <div className="mt-2 flex flex-wrap gap-2">
         {vars.map(x => (
-          <button key={x.v} type="button" onClick={() => insert(x.v)} className="rounded-full bg-white/[.05] px-2.5 py-1 text-[12px] ring-1 ring-white/10 hover:bg-neon/10 hover:ring-neon/40">
+          <button key={x.v} type="button" onClick={() => insert(x.v)} className="rounded-[5px] border border-white/10 bg-white/[.04] px-2 py-0.5 font-mono text-[12px] hover:border-neon/40 hover:text-neon">
             <span className="font-mono font-bold text-neon">{x.v}</span> <span className="text-fg-3">{x.label}</span>
           </button>
         ))}
@@ -56,7 +56,7 @@ export function AutoChat() {
                 const s = stats(o.id);
                 const rate = s?.sent ? Math.round((s.won / s.sent) * 100) : null;
                 return (
-                  <div key={o.id} className={clsx('rounded-2xl p-4 ring-1', o.enabled ? 'bg-white/[.02] ring-white/[.07]' : 'opacity-50 ring-white/[.04]')}>
+                  <div key={o.id} className={clsx('well p-4', !o.enabled && 'opacity-50')}>
                     <div className="mb-3 flex flex-wrap items-center gap-3">
                       <span className="grid h-8 w-8 place-items-center rounded-lg bg-neon/15 font-black text-neon">{o.id}</span>
                       <Toggle checked={o.enabled} onChange={v => set(x => { x.openers[i].enabled = v; })} />
@@ -94,7 +94,7 @@ export function AutoChat() {
           <div className="max-h-[560px] space-y-2 overflow-y-auto p-4">
             {!outbox?.length && <div className="grid place-items-center gap-2 py-10 text-center text-[13px] text-fg-3"><Inbox />Nothing queued yet</div>}
             {outbox?.map(it => (
-              <div key={it.id} className="rounded-xl bg-white/[.03] p-3 ring-1 ring-white/[.05]">
+              <div key={it.id} className="well p-3">
                 <div className="flex items-center gap-2 text-[12px]">
                   <Badge tone={it.status === 'sent' ? 'ok' : it.status === 'pending' ? 'warn' : it.status === 'failed' ? 'bad' : 'muted'}>{it.status}</Badge>
                   <span className="font-semibold capitalize">{it.kind.replace('_', ' ')}</span>
