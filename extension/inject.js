@@ -2,7 +2,7 @@
 // 1) Recorder: copies Eldorado's own /api/ calls (URL, status, bodies) so we can learn endpoints. Secrets are redacted.
 // 2) Remembers the extra headers Eldorado's own app puts on its API calls (e.g. its XSRF token), in memory only,
 //    so the extension's own Eldorado calls (creating API keys) look the same and aren't refused.
-// 3) Chat bridge: sends a chat message through the page's own TalkJS session, if one exists.
+// 3) Chat bridge: sends chat messages through TalkJS with the logged-in account's chat token.
 (() => {
   if (window.__hawarysBot) return;
   window.__hawarysBot = true;
@@ -83,33 +83,65 @@
   };
 
   // ---- chat bridge ----
-  function findTalkSession() {
-    const seen = new Set();
-    const check = v => v && typeof v === 'object' && typeof v.getOrCreateConversation === 'function' ? v : null;
-    for (const key of Object.keys(window)) {
-      let v; try { v = window[key]; } catch { continue; }
-      if (!v || typeof v !== 'object' || seen.has(v)) continue;
-      seen.add(v);
-      const hit = check(v); if (hit) return hit;
-      try { for (const k2 of Object.keys(v).slice(0, 60)) { const h = check(v[k2]); if (h) return h; } } catch { /* ignore */ }
+  // Eldorado's chat is TalkJS. Like Eldorado's own app, we open a TalkJS session with the chat token from
+  // /api/conversations/me/authorize (your logged-in account) and send through it.
+  const TALK_APP_ID = '49mLECOW'; // Eldorado's public TalkJS app id (from its site config)
+  let chat = null; // { session, userId, at }
+
+  function loadTalk() {
+    if (window.Talk) return window.Talk;
+    // TalkJS's official loader snippet (Eldorado uses the same one).
+    (function (n, t, m, e, s, i) { i = t.createElement('script'); i.async = 1; i.src = 'https://cdn.talkjs.com/talk.js'; t.head.appendChild(i); e = n.Promise;
+      n.Talk = { v: 3, ready: { then(r) { if (e) return new e((h, c) => { m.push([r, h, c]); }); m.push([r]); }, catch() { return e && new e(); }, c: m } }; })(window, document, []);
+    return window.Talk;
+  }
+
+  async function chatToken() {
+    const res = await origFetch('/api/conversations/me/authorize', { credentials: 'include', headers: { ...siteHeaders, Accept: 'application/json, text/plain, */*' } });
+    if (res.status === 401 || res.status === 403) throw new Error('Not logged in to Eldorado in this Chrome');
+    if (!res.ok) throw new Error(`Chat login failed (HTTP ${res.status})`);
+    const { token } = await res.json();
+    if (!token) throw new Error('Chat login returned no token');
+    return token;
+  }
+
+  async function chatSession() {
+    if (chat && Date.now() - chat.at < 20 * 60_000) return chat.session;
+    const Talk = loadTalk();
+    await Promise.race([Talk.ready, new Promise((_, no) => setTimeout(() => no(new Error('Chat library did not load')), 15000))]);
+    const token = await chatToken();
+    const claims = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const userId = claims.userId ?? claims.sub;
+    if (!userId) throw new Error('Chat token has no user id');
+    try { chat?.session?.destroy?.(); } catch { /* ignore */ }
+    const session = new window.Talk.Session({ appId: TALK_APP_ID, me: new window.Talk.User(userId), tokenFetcher: chatToken });
+    chat = { session, userId, at: Date.now() };
+    return session;
+  }
+
+  async function sendChat(conversationId, text) {
+    const session = await chatSession();
+    // Newer TalkJS SDK: session.conversation(id).send(text). Older: getOrCreateConversation(id).sendMessage(text).
+    if (typeof session.conversation === 'function') {
+      const ref = session.conversation(conversationId);
+      if (typeof ref?.send === 'function') { await ref.send(text); return; }
     }
-    return null;
+    const conv = session.getOrCreateConversation(conversationId);
+    if (typeof conv?.sendMessage !== 'function') throw new Error('This TalkJS version cannot send messages from the extension');
+    await conv.sendMessage(text);
   }
 
   window.addEventListener('message', async e => {
     if (e.source !== window || !e.data || typeof e.data.__hb !== 'string') return;
     const { __hb: kind, id } = e.data;
     if (kind === 'site-headers') window.postMessage({ __hb: 'site-headers-result', id, headers: { ...siteHeaders } }, location.origin);
-    if (kind === 'probe-chat') window.postMessage({ __hb: 'probe-chat-result', id, ok: !!findTalkSession() }, location.origin);
+    if (kind === 'probe-chat') window.postMessage({ __hb: 'probe-chat-result', id, ok: true }, location.origin);
     if (kind === 'send-chat') {
       try {
-        const session = findTalkSession();
-        if (!session) throw new Error('No chat session on this page yet. Open Eldorado messages once.');
-        const conv = session.getOrCreateConversation(e.data.conversationId);
-        if (typeof conv.sendMessage !== 'function') throw new Error('This chat version cannot send from the extension yet');
-        await conv.sendMessage(e.data.text);
+        await sendChat(e.data.conversationId, e.data.text);
         window.postMessage({ __hb: 'send-chat-result', id, ok: true }, location.origin);
       } catch (err) {
+        chat = null; // start a fresh session next time
         window.postMessage({ __hb: 'send-chat-result', id, ok: false, error: String(err?.message || err) }, location.origin);
       }
     }
