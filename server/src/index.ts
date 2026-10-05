@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { api } from './routes.ts';
 import { startEngine, log } from './engine.ts';
+import { backupNow } from './backup.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const WEB_DIST = resolve(import.meta.dirname, '../../web/dist');
@@ -33,4 +34,8 @@ serve({ fetch: app.fetch, port: PORT, hostname: process.env.HOST ?? '127.0.0.1' 
   console.log(`Hawary's Bot listening on http://${info.address}:${info.port}`);
   log('info', '🚀 Server started');
   startEngine();
+  // Daily copy of the database in server/data/backups (newest 14 kept).
+  const backup = () => { try { backupNow(); } catch (e) { log('warn', `Backup failed: ${(e as Error).message}`); } };
+  setTimeout(backup, 60_000);
+  setInterval(backup, 24 * 3600_000);
 });

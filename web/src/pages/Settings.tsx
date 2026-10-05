@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { KeyRound, Bot, Bell, Percent, Puzzle, PlugZap, Trash2, CircleDot, Download } from 'lucide-react';
+import { KeyRound, Bot, Bell, Percent, Puzzle, PlugZap, Trash2, CircleDot, Download, Upload, Archive } from 'lucide-react';
 import { api, ago, useData } from '../api.ts';
 import { Badge, Button, Field, Num, PageHeader, Section, Toggle, clsx, useAction } from '../components/ui.tsx';
 
@@ -78,6 +78,7 @@ export function SettingsPage() {
         </Section>
 
         <ExtensionPanel s={s} ov={ov} onRecord={v => save('rec', { recording: v }, v ? 'Recording on: browse Eldorado now' : 'Recording off')} busy={busy} />
+        <BackupPanel onImported={() => { reload(); setS(null); }} />
       </div>
     </>
   );
@@ -126,6 +127,44 @@ function ExtensionPanel({ s, ov, onRecord, busy }: { s: any; ov: any; onRecord: 
               </div>
             ))}
           </div>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+function BackupPanel({ onImported }: { onImported: () => void }) {
+  const { busy, run } = useAction();
+  const importFile = (file: File) => run('import', async () => {
+    let body: unknown;
+    try { body = JSON.parse(await file.text()); } catch { throw new Error("That file isn't a settings file"); }
+    const r = await api<{ imported: string[] }>('/settings/import', { body });
+    onImported();
+    return r;
+  }, 'Settings loaded');
+  return (
+    <Section className="xl:col-span-2" title={<span className="flex items-center gap-2"><Archive size={16} /> Backup &amp; restore</span>}
+      subtitle="Your settings are saved on this PC (server\data) and kept when you update. Keep an extra copy here, or move them to another PC or a server.">
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="well p-4">
+          <div className="text-[14px] font-semibold">Save settings to a file</div>
+          <p className="mt-1 text-[12.5px] text-fg-3">Bot behavior, prices, auto-chat messages, fees and Discord. Not the Eldorado API keys (reconnect them from the extension).</p>
+          <a href="/api/settings/export" download><Button className="mt-3" icon={<Download size={15} />}>Download settings</Button></a>
+        </div>
+        <div className="well p-4">
+          <div className="text-[14px] font-semibold">Load settings from a file</div>
+          <p className="mt-1 text-[12.5px] text-fg-3">Replaces the current settings with the ones in the file. Orders, workers and money are not touched.</p>
+          <label className="mt-3 inline-block">
+            <input type="file" accept=".json,application/json" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f && confirm('Replace your current settings with this file?')) importFile(f); }} />
+            <span className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[7px] border border-white/[.08] bg-white/[.04] px-4 text-[14px] font-semibold hover:bg-white/[.07]">
+              {busy === 'import' ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Upload size={15} />}Choose file
+            </span>
+          </label>
+        </div>
+        <div className="well p-4">
+          <div className="text-[14px] font-semibold">Full backup</div>
+          <p className="mt-1 text-[12.5px] text-fg-3">Everything (orders, workers, money, settings) is copied to server\data\backups once a day automatically. Make one now:</p>
+          <Button className="mt-3" icon={<Archive size={15} />} loading={busy === 'backup'} onClick={() => run('backup', () => api('/settings/backup', { method: 'POST' }), 'Backup saved in server\\data\\backups')}>Back up now</Button>
         </div>
       </div>
     </Section>

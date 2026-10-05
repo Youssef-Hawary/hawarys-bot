@@ -65,8 +65,7 @@ New orders appear on the **Order board**; click **Take** to claim one.
 **Keep in mind:** the PC must not sleep (Windows Settings → System → Power → Sleep: *Never*), Chrome stays open with one Eldorado tab,
 and the black `npm start` window stays open. Workers can only use it from *this* PC until it moves to a server.
 
-**Updating later:** download the ZIP again, extract over the old folder (your data in `server\data` stays), run `npm run setup` and `npm run build`, then `npm start`.
-In `chrome://extensions` click the reload ↻ icon on Hawary's Bot.
+**Updating later:** close the bot, double-click `update.bat` (backs up `server\data`, downloads the new version, keeps all your settings), reload the extension in `chrome://extensions`, then double-click `start.bat`.
 
 ## Try it with demo data
 

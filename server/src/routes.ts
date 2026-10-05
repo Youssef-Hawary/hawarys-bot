@@ -6,6 +6,7 @@ import { createSession, createUser, deleteSession, login, userCount, userFromTok
 import { GAMES, GAME_NAMES, TIERS, ladder, type Game } from './ranks.ts';
 import { REGIONS, REGION_NAMES, POINTS_LABEL, SERVICE_KEYS, SERVICE_INFO, getPricing, savePricing, defaultPricing, migratePricing, normalizeRequest, quote } from './pricing.ts';
 import { eldorado, getCreds, hasCreds } from './eldorado.ts';
+import { backupNow } from './backup.ts';
 import { getDiscord, sendDiscord } from './discord.ts';
 import { analytics, workerSummary, workerPay, getFees, LIVE_STATES, type OrderRow } from './money.ts';
 import {
@@ -422,6 +423,43 @@ api.get('/settings', ownerOnly, c => {
     bot: getBot(), discord: getDiscord(), fees: getFees(), gameIds: getSetting('gameIds', {}), recording: getSetting('recording', false),
     eldorado: { clientId: creds.clientId, hasSecret: !!creds.clientSecret, secretLast4: creds.clientSecret.slice(-4) },
   });
+});
+
+// Settings file: everything you set up (bot, prices, messages, fees, Discord), but never the Eldorado API keys.
+const EXPORT_KEYS = ['bot', 'discord', 'fees', 'gameIds', 'messages', 'pricing:valorant', 'pricing:lol'];
+api.get('/settings/export', ownerOnly, c => {
+  const settings: Record<string, unknown> = {};
+  for (const k of EXPORT_KEYS) {
+    const v = k.startsWith('pricing:') ? getPricing(k.slice(8) as Game)
+      : k === 'bot' ? getBot() : k === 'messages' ? getMessages() : k === 'fees' ? getFees() : k === 'discord' ? getDiscord() : getSetting(k, null);
+    if (v != null) settings[k] = v;
+  }
+  if (settings.bot) settings.bot = { ...(settings.bot as object), running: false };
+  c.header('Content-Disposition', `attachment; filename="hawarys-bot-settings-${new Date().toISOString().slice(0, 10)}.json"`);
+  return c.json({ app: "Hawary's Bot", kind: 'settings', version: 1, exportedAt: new Date().toISOString(), settings });
+});
+
+api.post('/settings/import', ownerOnly, async c => {
+  const b = await c.req.json().catch(() => null);
+  if (b?.kind !== 'settings' || typeof b.settings !== 'object') return c.json({ error: "That isn't a Hawary's Bot settings file" }, 400);
+  const done: string[] = [];
+  for (const k of EXPORT_KEYS) {
+    const v = b.settings[k];
+    if (v == null) continue;
+    if (k.startsWith('pricing:')) savePricing(k.slice(8) as Game, migratePricing(k.slice(8) as Game, v));
+    else if (k === 'bot') setSetting('bot', { ...getBot(), ...v, running: getBot().running });
+    else setSetting(k, v);
+    done.push(k);
+  }
+  audit(c.get('user').id, 'settings.import', { keys: done });
+  log('info', `📥 ${c.get('user').display_name} imported settings (${done.length} sections)`);
+  changed('bot'); changed('pricing'); changed('messages');
+  return c.json({ ok: true, imported: done });
+});
+
+api.post('/settings/backup', ownerOnly, c => {
+  const file = backupNow();
+  return c.json({ ok: true, file });
 });
 
 api.put('/settings', ownerOnly, async c => {

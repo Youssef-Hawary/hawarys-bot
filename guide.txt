@@ -29,10 +29,9 @@ A. INSTALL (only once)
 
 B. START THE BOT (every time you turn the PC on)
 ------------------------------------------------
-1. Open the bot folder, click the address bar, type  cmd  and press Enter.
-   In the black window type:
-       npm start
-   LEAVE THIS WINDOW OPEN. Closing it stops the bot.
+1. Open the bot folder and double-click  start.bat
+   (or: click the address bar, type  cmd , press Enter, then type  npm start )
+   LEAVE THE BLACK WINDOW OPEN. Closing it stops the bot.
 
 2. In Chrome go to:  http://127.0.0.1:8787
    The first time, it asks you to create the OWNER account.
@@ -99,12 +98,25 @@ KEEP IT RUNNING
 - Keep the black "npm start" window open.
 
 
-UPDATING LATER
---------------
-1. Download the ZIP again from GitHub and extract it over the old folder.
-   Your data in server\data stays.
-2. In the black window run:  npm run setup   then   npm run build   then   npm start
-3. In chrome://extensions, click the reload icon on "Hawary's Bot".
+UPDATING LATER (your settings are kept)
+---------------------------------------
+Everything you set up (settings, prices, accounts, orders) is saved in the folder
+server\data inside the bot folder. Updates never touch it.
+
+1. Close the black window where the bot is running.
+2. Double-click  update.bat  in the bot folder. It backs up your data first,
+   downloads the newest version from GitHub and installs it.
+3. Chrome: go to chrome://extensions and click the reload icon on "Hawary's Bot".
+4. Press F5 on your Eldorado tab.
+5. Double-click  start.bat
+
+Never delete the bot folder and never extract an update into a NEW folder,
+or the bot starts empty. (If that happens: copy the old server\data folder back.)
+
+Extra safety: Dashboard -> Settings -> Backup & restore
+- "Download settings" saves your settings and prices to a file.
+- "Choose file" loads them back (e.g. on another PC or a server).
+- A full backup is made automatically every day in server\data\backups.
 
 
 WHAT MIGHT NOT WORK THE FIRST TIME
