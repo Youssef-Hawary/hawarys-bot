@@ -73,7 +73,10 @@
       super(...args);
       try {
         this.addEventListener('message', e => {
-          if (typeof e.data === 'string' && e.data.includes('BoostingRequestCreated')) window.postMessage({ __hb: 'boosting-event' }, location.origin);
+          if (typeof e.data === 'string' && e.data.includes('BoostingRequestCreated')) {
+            const ids = [...new Set(e.data.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [])];
+            window.postMessage({ __hb: 'boosting-event', ids }, location.origin);
+          }
         });
       } catch { /* never break the page */ }
     }

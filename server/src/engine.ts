@@ -95,8 +95,16 @@ export function ingestRequest(r: BoostingRequestItem) {
 }
 
 /** Details read from the request page by the extension. */
-export async function receiveDetails(input: { requestId: string; title?: string; fields: Record<string, string>; buyer?: string }) {
-  const row = db.prepare('SELECT * FROM requests WHERE id = ?').get(input.requestId) as any;
+export async function receiveDetails(input: { requestId: string; title?: string; fields: Record<string, string>; buyer?: string; fast?: boolean }) {
+  let row = db.prepare('SELECT * FROM requests WHERE id = ?').get(input.requestId) as any;
+  if (!row && input.fast) {
+    // Fast path: the extension read the details while the request list was still on its way. Wait for that list
+    // (it has the game and buyer); if the request still isn't in it, the normal path will pick it up later.
+    await pollNow();
+    row = db.prepare('SELECT * FROM requests WHERE id = ?').get(input.requestId) as any;
+    if (!row) return;
+  }
+  if (row && row.status !== 'needs_details' && row.details) return; // already handled (e.g. by the normal path)
   if (!row) {
     db.prepare('INSERT INTO requests (id, game, category, buyer, created_at, seen_at) VALUES (?, ?, ?, ?, ?, ?)')
       .run(input.requestId, detectGame(input.title ?? ''), input.title ?? null, input.buyer ?? null, now(), now());
@@ -135,16 +143,18 @@ export async function processRequest(id: string) {
 
   if (bot.dryRun) {
     set('would_offer', { price: q.price, hours: q.hours, variant: opener?.id ?? null });
-    log('info', `🧪 DRY RUN would offer $${q.price} (${time}) on ${label}`);
+    log('info', `🧪 DRY RUN would offer $${q.price} (${time}) on ${label}${since(row.created_at)}`);
     return;
   }
   const lastHour = (db.prepare('SELECT COUNT(*) AS n FROM requests WHERE offered_at > ?').get(now() - 3600_000) as { n: number }).n;
   if (lastHour >= bot.maxOffersPerHour) { set('skipped', { reason: 'hourly offer limit reached' }); log('warn', `Hourly offer limit (${bot.maxOffersPerHour}) reached`); return; }
 
+  // Claimed before the network call (synchronously), so a second copy of this request can never offer again.
+  set('offering');
   try {
     const offer = await eldorado.createOffer(id, q.price, q.delivery, text);
     set('offered', { price: q.price, hours: q.hours, offer_id: offer?.id ?? null, variant: opener?.id ?? null, offered_at: now() });
-    log('success', `✅ Offered $${q.price} (${time}) on ${label}`);
+    log('success', `✅ Offered $${q.price} (${time}) on ${label}${since(row.created_at)}`);
     const d = getDiscord();
     if (d.newOffer) sendDiscord('📨 Offer sent', label, [{ name: 'Price', value: `$${q.price}`, inline: true }, { name: 'Delivery', value: time, inline: true }]).catch(() => {});
     if (messages.followUp.enabled) queue('follow_up', fill(messages.followUp.text, { name: row.buyer, price: q.price, time }), { requestId: id }, messages.followUp.delayMinutes * 60_000);
@@ -152,6 +162,13 @@ export async function processRequest(id: string) {
     set('error', { reason: String((e as Error).message).slice(0, 300) });
     log('error', `Offer failed on ${label}: ${(e as Error).message}`);
   }
+}
+
+/** " · 1.4s after it was posted" (uses Eldorado's creation time, so the PC clock should be right). */
+function since(createdAt: number | null) {
+  if (!createdAt) return '';
+  const s = (now() - createdAt) / 1000;
+  return s >= 0 && s < 3600 ? ` · ⚡ ${s < 10 ? s.toFixed(1) : Math.round(s)}s after it was posted` : '';
 }
 
 async function pollRequests() {
@@ -284,6 +301,7 @@ async function tick() {
     await safe('deadlines', checkDeadlines);
     await safe('daily report', dailyReport);
     if (!bot.running || !hasCreds()) return;
+    await safe('login token', eldorado.warmToken);
     if (now() - lastPoll >= bot.pollSeconds * 1000) {
       lastPoll = now();
       await safe('requests', pollRequests);

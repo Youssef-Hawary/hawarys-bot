@@ -11,6 +11,7 @@ type Req = {
 
 const STATUS: Record<string, { label: string; tone: 'ok' | 'warn' | 'bad' | 'neon' | 'muted' | 'violet' }> = {
   needs_details: { label: 'Waiting for details', tone: 'warn' },
+  offering: { label: 'Sending…', tone: 'neon' },
   offered: { label: 'Offer sent', tone: 'neon' },
   would_offer: { label: 'Dry run', tone: 'violet' },
   skipped: { label: 'Skipped', tone: 'muted' },

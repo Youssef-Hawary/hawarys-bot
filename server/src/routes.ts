@@ -490,7 +490,7 @@ api.post('/ext/report', async c => {
 api.post('/ext/request-details', async c => {
   const b = await c.req.json();
   if (!b.requestId || !b.fields) return c.json({ error: 'requestId and fields required' }, 400);
-  await receiveDetails({ requestId: String(b.requestId), title: b.title, fields: b.fields, buyer: b.buyer });
+  await receiveDetails({ requestId: String(b.requestId), title: b.title, fields: b.fields, buyer: b.buyer, fast: !!b.fast });
   const row = db.prepare('SELECT status, reason, price FROM requests WHERE id = ?').get(String(b.requestId));
   return c.json(row);
 });

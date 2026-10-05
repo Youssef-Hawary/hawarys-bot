@@ -58,9 +58,11 @@ setTimeout(check, 1500);
 // Live feed (page → background): a new boosting request was just created.
 let lastEvent = 0;
 window.addEventListener('message', e => {
-  if (e.source !== window || e.data?.__hb !== 'boosting-event' || Date.now() - lastEvent < 300) return;
+  if (e.source !== window || e.data?.__hb !== 'boosting-event') return;
+  const ids = Array.isArray(e.data.ids) ? e.data.ids.slice(0, 5) : [];
+  if (!ids.length && Date.now() - lastEvent < 300) return;
   lastEvent = Date.now();
-  chrome.runtime.sendMessage({ type: 'boosting-event' }).catch(() => {});
+  chrome.runtime.sendMessage({ type: 'boosting-event', ids }).catch(() => {});
 });
 // Keeps the background worker awake and checking every few seconds while an Eldorado tab is open
 // (Chrome's own timers can't run more often than every 30 seconds).
@@ -115,10 +117,13 @@ async function createKeys() {
 
 // Reads a boosting request through Eldorado's own API (the same call its request page makes).
 // Returns label → value fields like { "Current Rank": "Platinum I", "Server": "EU" }.
+let detailsPathFirst = 0; // index of the address that worked last time, tried first
 async function fetchDetails(requestId) {
   const { headers = {} } = await askPage('site-headers', {}, 3000);
   let last = '';
-  for (const path of [`/api/boostingOffers/boostingRequests/${requestId}/details`, `/api/boostingOffers/boostingRequests/${requestId}`]) {
+  const paths = [`/api/boostingOffers/boostingRequests/${requestId}/details`, `/api/boostingOffers/boostingRequests/${requestId}`];
+  if (detailsPathFirst) paths.reverse();
+  for (const path of paths) {
     const res = await fetch(path, { credentials: 'include', headers: { ...headers, Accept: 'application/json, text/plain, */*' } });
     const text = await res.text();
     if (!res.ok) { last = `HTTP ${res.status} ${text.slice(0, 120)}`; continue; }
@@ -137,6 +142,7 @@ async function fetchDetails(requestId) {
     // "Yes" options (Stream, Offline Mode, ...) go into the description so modifiers can match them.
     if (options.length) fields.Description = [fields.Description, `Options: ${options.join(', ')}`].filter(Boolean).join(' | ');
     const buyer = root.buyerInfo?.username ?? root.buyerInfo?.userName ?? root.buyerUsername ?? null;
+    detailsPathFirst = path.endsWith('/details') ? 0 : 1;
     return { ok: true, fields, buyer };
   }
   return { ok: false, error: last };

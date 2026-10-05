@@ -127,8 +127,18 @@ async function tick() {
 
 /** Eldorado's live feed announced a new request: make the server check now, then read details at once. */
 let lastWake = 0;
-async function onBoostingEvent() {
-  try { await call('/ext/poke', {}); } catch { /* not connected */ }
+async function onBoostingEvent(ids = []) {
+  const poke = call('/ext/poke', {}).catch(() => null);
+  const tabs = await eldoradoTabs();
+  // Read the details while the server is still fetching the request list: both trips happen at once.
+  await Promise.all(tabs.length ? ids.map(async requestId => {
+    let r;
+    try { r = await chrome.tabs.sendMessage(tabs[0].id, { type: 'fetch-details', requestId }); } catch { return; }
+    if (!r?.ok) return; // not a request id (e.g. the notification's own id); the normal path still covers it
+    const res = await call('/ext/request-details', { requestId, fields: r.fields, buyer: r.buyer, fast: true }).catch(() => null);
+    if (res?.status) await save({ lastDetails: { at: Date.now(), fields: r.fields, result: res } });
+  }) : []);
+  await poke;
   tick();
 }
 
@@ -161,7 +171,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     })().then(r => reply({ ok: true, ...r }), e => reply({ ok: false, error: String(e.message || e) }));
     return true;
   }
-  if (msg.type === 'boosting-event') onBoostingEvent();
+  if (msg.type === 'boosting-event') onBoostingEvent(msg.ids);
   if (msg.type === 'wake' && Date.now() - lastWake > 3500) { lastWake = Date.now(); tick(); }
   if (msg.type === 'tick') { tick().then(() => reply({ ok: true })); return true; }
 });

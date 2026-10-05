@@ -76,6 +76,8 @@ export type BoostingRequestItem = {
 
 export const eldorado = {
   testToken: async () => { token = null; await ensureToken(); return true; },
+  /** Refreshes the login token shortly before it expires, so offers never wait for a new one. */
+  warmToken: async () => { if (!token || Date.now() > tokenExpires - 120_000) { token = null; await ensureToken(); } },
 
   listRequests: (filter: 'ActiveRequests' | 'OfferSubmitted' | 'OfferWon' | 'OfferLost' = 'ActiveRequests', cursorValue?: string) =>
     call('GET', `/api/boostingOffers/me/boostingRequests/received${qs({ filter, pageSize: 50, cursorValue })}`) as
