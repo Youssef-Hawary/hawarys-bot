@@ -1,0 +1,21 @@
+[Unit]
+Description=Hawary's Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=hawary
+WorkingDirectory=/opt/hawarys-bot/app/server
+Environment=NODE_ENV=production
+Environment=PORT=8787
+Environment=SECURE_COOKIES=1
+ExecStart=/usr/bin/node src/index.ts
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/hawarys-bot/app/server/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

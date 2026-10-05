@@ -1,0 +1,42 @@
+# Copy to config.toml and replace the EXAMPLE values with your real data.
+
+[bot]
+dry_run = true            # true = never sends anything to Eldorado, only tells you what it WOULD do
+auto_bid = "approve"      # "off" | "approve" (Telegram buttons ask you first) | "auto"
+max_bids_per_day = 30     # safety cap for auto mode
+poll_seconds = 60         # how often to check Eldorado (don't go below ~30)
+
+[replies]
+# {buyer}, {title}, {order_id} are filled in automatically. Empty string = no auto-reply.
+order_started = "Hi {buyer}! Thanks for your order. I'll start your boost shortly and keep you updated here."
+bid_message = "Hi! I can do this boost. Experienced booster, fast and safe. Ready to start right away."
+
+# ---------------- Games (EXAMPLE values, replace with yours) ----------------
+
+[games.valorant]
+name = "Valorant"
+min_price = 5.0
+eta_hours_per_step = 4
+
+[games.valorant.rank_boost]
+ranks = [
+  "Iron 1", "Iron 2", "Iron 3",
+  "Bronze 1", "Bronze 2", "Bronze 3",
+  "Silver 1", "Silver 2", "Silver 3",
+  "Gold 1", "Gold 2", "Gold 3",
+  "Platinum 1", "Platinum 2", "Platinum 3",
+  "Diamond 1", "Diamond 2", "Diamond 3",
+  "Ascendant 1", "Ascendant 2", "Ascendant 3",
+  "Immortal 1",
+]
+max_rank = "Immortal 1"   # never bid above this
+# Price for ONE division step, by the tier you're boosting FROM (first word of the rank)
+step_price = { Iron = 3.0, Bronze = 3.5, Silver = 4.0, Gold = 5.0, Platinum = 7.0, Diamond = 10.0, Ascendant = 15.0 }
+
+[games.valorant.extras]   # price multipliers
+duo = 1.5
+priority = 1.2
+stream = 1.1
+
+[games.valorant.fixed]    # flat-price services
+"placement matches" = { price = 15.0, eta_hours = 24 }

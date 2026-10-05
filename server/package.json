@@ -1,0 +1,18 @@
+{
+  "name": "hawarys-bot-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.ts",
+    "dev": "node --watch src/index.ts",
+    "demo": "node src/seed-demo.ts && DB_PATH=data/demo.db node src/index.ts",
+    "test": "node --test src/*.test.ts"
+  },
+  "engines": {
+    "node": ">=23.6"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.3",
+    "hono": "^4.13.13"
+  }
+}
