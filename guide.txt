@@ -1,0 +1,118 @@
+HAWARY'S BOT - SETUP GUIDE (Windows PC)
+=======================================
+
+GitHub only stores the code. It can't run the bot.
+Your PC runs it, and you open the dashboard at http://127.0.0.1:8787 on that PC.
+Keep that PC on, with Chrome open on Eldorado.
+Workers can't log in from their own PCs until the bot moves to a real server later.
+
+
+A. INSTALL (only once)
+----------------------
+1. Go to https://nodejs.org and download the "LTS" version.
+   Install it with all the default options.
+
+2. Open https://github.com/Youssef-Hawary/hawarys-bot
+   Click the green "Code" button, then "Download ZIP".
+   Right-click the ZIP, choose "Extract All", and put it somewhere easy,
+   for example: Documents\hawarys-bot
+
+3. Open that folder (the one with README.md in it).
+   Click the address bar at the top of the window, type:  cmd
+   and press Enter. A black window opens.
+
+4. In the black window, type this and press Enter. Wait until it finishes:
+       npm run setup
+   Then type this and press Enter. Wait until it finishes:
+       npm run build
+
+
+B. START THE BOT (every time you turn the PC on)
+------------------------------------------------
+1. Open the bot folder, click the address bar, type  cmd  and press Enter.
+   In the black window type:
+       npm start
+   LEAVE THIS WINDOW OPEN. Closing it stops the bot.
+
+2. In Chrome go to:  http://127.0.0.1:8787
+   The first time, it asks you to create the OWNER account.
+   Pick a strong password.
+
+
+C. CHROME EXTENSION (only once)
+-------------------------------
+1. In Chrome go to:  chrome://extensions
+   Turn on "Developer mode" (top right).
+   Click "Load unpacked" and pick the "extension" folder inside the bot folder.
+
+2. Click the puzzle icon in Chrome and pin "Hawary's Bot".
+   Click the extension icon and fill in:
+       Dashboard address:  http://127.0.0.1:8787
+       Username / password: your owner account
+   Click "Connect", then "Allow".
+
+
+D. CONNECT ELDORADO (only once)
+-------------------------------
+1. Open https://www.eldorado.gg in the same Chrome and log in to your seller account.
+   Keep the site language set to ENGLISH.
+
+2. Click the extension, then "Connect Eldorado API (owner)".
+   You should see:  Eldorado API connected
+
+3. Open any one boosting request on Eldorado, so the bot learns where request pages are.
+
+
+E. TEST WITHOUT RISK (dry run)
+------------------------------
+1. Dashboard -> Settings: set the Eldorado fee %, and keep "Dry run" ON.
+   (Optional) Add a Discord webhook to get "new order" alerts.
+
+2. Dashboard -> Pricing: set your prices.
+   Use "Test a request" on the right to check what the bot would charge.
+
+3. Dashboard -> Overview: click "Start bot".
+
+4. Watch "Live offers". New requests show what the bot WOULD offer.
+   Nothing is sent to buyers yet.
+
+5. Dashboard -> Settings -> Extension: turn the "Recorder" ON.
+   On Eldorado, open a request and send one chat message to any buyer.
+   Turn the Recorder OFF.
+   Send Claude a screenshot of the recorded list, so chat sending can be matched to Eldorado.
+
+
+F. GO LIVE
+----------
+When the would-offer prices look right (for example after a day):
+Dashboard -> Settings -> turn "Dry run" OFF.
+The bot now sends real offers with your opening message.
+
+New orders appear on the "Order board". Click "Take" to claim one.
+
+
+KEEP IT RUNNING
+---------------
+- Windows Settings -> System -> Power -> Sleep: set to "Never".
+- Keep Chrome open with one Eldorado tab.
+- Keep the black "npm start" window open.
+
+
+UPDATING LATER
+--------------
+1. Download the ZIP again from GitHub and extract it over the old folder.
+   Your data in server\data stays.
+2. In the black window run:  npm run setup   then   npm run build   then   npm start
+3. In chrome://extensions, click the reload icon on "Hawary's Bot".
+
+
+WHAT MIGHT NOT WORK THE FIRST TIME
+----------------------------------
+These parts have never run against the real Eldorado:
+- the "Connect Eldorado API" button
+- reading the request details
+- sending chat messages
+
+That's why step E stays in dry run.
+If something shows an error or looks wrong, send Claude a screenshot and it will be fixed.
+After a fix: download the ZIP again (see UPDATING LATER) and reload the extension.
