@@ -66,7 +66,11 @@ export function parseTimespan(s: string | null | undefined) {
   return (((Number(m[1] ?? 0) * 24 + Number(m[2])) * 60 + Number(m[3])) * 60 + Number(m[4])) * 1000;
 }
 
+// Eldorado's game ids (from its public /api/library): Valorant = 32, League of Legends = 17.
+const KNOWN_GAME_IDS: Record<string, Game> = { '32': 'valorant', '17': 'lol' };
+
 function gameFor(item: { gameId?: string | null; title?: string | null }): Game | null {
+  if (item.gameId && KNOWN_GAME_IDS[String(item.gameId)]) return KNOWN_GAME_IDS[String(item.gameId)];
   const byText = detectGame(item.title ?? '');
   const map = getSetting<Record<string, Game>>('gameIds', {});
   if (byText && item.gameId && !map[item.gameId]) { map[item.gameId] = byText; setSetting('gameIds', map); }
@@ -116,17 +120,30 @@ export async function receiveDetails(input: { requestId: string; title?: string;
   await processRequest(input.requestId);
 }
 
+/** Last resort: tell the game from the request's own fields (LP vs RR, rank names, servers). */
+function gameFromFields(fields: Record<string, string>): Game | null {
+  const text = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join(' ').toLowerCase();
+  if (/\blp\b|emerald|grandmaster|challenger|\bmaster\b|euw|eune|\boce\b|\blan\b|\blas\b/.test(text)) return 'lol';
+  if (/\brr\b|ascendant|immortal|radiant/.test(text)) return 'valorant';
+  return null;
+}
+
 export async function processRequest(id: string) {
   const row = db.prepare('SELECT * FROM requests WHERE id = ?').get(id) as any;
   if (!row || row.status !== 'needs_details' || !row.details) return;
   const details = JSON.parse(row.details);
-  const game: Game | null = row.game ?? detectGame(details.title ?? '');
+  const game: Game | null = row.game ?? gameFor({ gameId: row.game_id, title: `${row.category ?? ''} ${details.title ?? ''}` }) ?? gameFromFields(details.fields ?? {});
+  if (game && !row.game) db.prepare('UPDATE requests SET game = ? WHERE id = ?').run(game, id);
   const set = (status: string, extra: Record<string, unknown> = {}) => {
     const cols = Object.keys(extra);
     db.prepare(`UPDATE requests SET status = ?${cols.map(c => `, ${c} = ?`).join('')} WHERE id = ?`).run(status, ...(Object.values(extra) as any[]), id);
     changed('requests');
   };
-  if (!game) { set('skipped', { reason: 'not Valorant/LoL' }); return; }
+  if (!game) {
+    set('skipped', { reason: `not Valorant/LoL (game id ${row.game_id ?? '?'})` });
+    log('skip', `Skipped request from ${row.buyer ?? '?'}: not Valorant/LoL (Eldorado game id ${row.game_id ?? '?'}, ${row.category ?? 'no category'})`);
+    return;
+  }
   if (isBlacklisted(row.buyer)) { set('skipped', { reason: 'buyer is blacklisted' }); log('skip', `Skipped ${row.buyer}: blacklisted`); return; }
 
   const norm = normalizeRequest(game, `${row.category ?? ''} ${details.title ?? ''}`, details.fields);
@@ -282,7 +299,7 @@ async function dailyReport() {
 // ---------------- loop ----------------
 
 let busy = false;
-let lastPoll = 0, lastOutcomes = 0, lastErrorMsg = '';
+let lastPoll = 0, lastOutcomes = 0, lastSubs = 0, lastErrorMsg = '';
 
 async function safe(name: string, fn: () => Promise<unknown> | unknown) {
   try { await fn(); lastErrorMsg = ''; }
@@ -307,6 +324,7 @@ async function tick() {
       await safe('requests', pollRequests);
       await safe('orders', pollOrders);
     }
+    if (now() - lastSubs >= 6 * 3600_000) { lastSubs = now(); await safe('subscriptions', checkSubscriptions); }
     if (now() - lastOutcomes >= 5 * 60_000) { lastOutcomes = now(); await safe('offer results', pollOutcomes); }
   } finally { busy = false; }
 }
@@ -327,7 +345,27 @@ export function pollNow(): Promise<number> {
   return pollingNow;
 }
 
+/** Eldorado only sends requests for the boosting categories you're subscribed to. Says which games are covered. */
+async function checkSubscriptions() {
+  const res = await eldorado.subscriptions();
+  const list: any[] = Array.isArray(res) ? res : res?.results ?? res?.subscriptions ?? res?.data ?? [];
+  const count: Record<Game, number> = { valorant: 0, lol: 0 };
+  for (const s of list) {
+    const id = String(s?.gameId ?? s?.boostingId?.gameId ?? s?.boostingIdentifier?.gameId ?? '');
+    const g = KNOWN_GAME_IDS[id];
+    if (g) count[g]++;
+  }
+  if (!list.length) { log('warn', '📭 Eldorado says you are not subscribed to any boosting category, so no requests will come in. Turn them on in your Eldorado seller boosting settings.'); return; }
+  log('info', `📬 Eldorado sends you requests for: Valorant (${count.valorant} categories), League of Legends (${count.lol} categories)`);
+  for (const g of ['valorant', 'lol'] as Game[]) {
+    if (!count[g]) log('warn', `📭 You are not subscribed to any ${g === 'lol' ? 'League of Legends' : 'Valorant'} boosting category on Eldorado, so those requests never reach the bot. Turn them on in your Eldorado seller boosting settings.`);
+  }
+}
+
 export function startEngine() {
+  // Requests dropped in the last 2 hours because the game wasn't recognised get another chance.
+  db.prepare(`UPDATE requests SET status = 'needs_details', reason = NULL, game = NULL
+              WHERE status = 'skipped' AND reason LIKE 'not Valorant/LoL%' AND seen_at > ?`).run(now() - 2 * 3600_000);
   setInterval(tick, 5000);
   tick();
 }

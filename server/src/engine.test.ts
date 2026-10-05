@@ -19,3 +19,15 @@ test('the same request delivered twice at once is offered only once', async () =
   assert.equal(row.status, 'offered');
   assert.ok(row.price > 0);
 });
+
+test('a League of Legends request (game id 17, category "Rank Boost") is recognised and priced', async () => {
+  setSetting('bot', { running: true, dryRun: true, pollSeconds: 10, maxOffersPerHour: 30, syncOnlineStatus: false, deadlineAlertHours: 2 });
+  const id = '22222222-2222-2222-2222-222222222222';
+  ingestRequest({ id, gameId: '17', boostingCategoryId: 'c', boostingCategoryTitle: 'Rank Boost', createdDate: new Date().toISOString(),
+    buyerId: 'b2', buyerUsername: 'buyer2', isBuyerMuted: false } as any);
+  await receiveDetails({ requestId: id, fields: { 'Current Rank': 'Gold IV', 'Current LP': '0', 'Desired Rank': 'Platinum IV', Server: 'EUW', 'Completion Method': 'Solo' } });
+  const row = db.prepare('SELECT game, status, price, reason FROM requests WHERE id = ?').get(id) as any;
+  assert.equal(row.game, 'lol');
+  assert.equal(row.status, 'would_offer', row.reason);
+  assert.ok(row.price > 0);
+});
