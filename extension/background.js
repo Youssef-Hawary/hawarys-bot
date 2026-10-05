@@ -128,6 +128,7 @@ async function tick() {
 /** Eldorado's live feed announced a new request: make the server check now, then read details at once. */
 let lastWake = 0;
 async function onBoostingEvent(ids = []) {
+  call('/ext/report', { level: 'info', message: '⚡ Live feed works: Eldorado announced a new request' }).catch(() => {});
   const poke = call('/ext/poke', {}).catch(() => null);
   const tabs = await eldoradoTabs();
   // Read the details while the server is still fetching the request list: both trips happen at once.
@@ -177,6 +178,47 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'wake' && Date.now() - lastWake > 3500) { lastWake = Date.now(); tick(); }
   if (msg.type === 'tick') { tick().then(() => reply({ ok: true })); return true; }
 });
+
+// ---- fast check: Eldorado's request list every 2 seconds, from the Eldorado tab ----
+// Works even when Eldorado's live feed doesn't announce a request. Only the main browser does it, only while the bot runs.
+const seenRequests = new Set();
+let listSeeded = false, scanning = false, pauseUntil = 0;
+
+async function handleNewRequest(tabId, item) {
+  let r;
+  try { r = await chrome.tabs.sendMessage(tabId, { type: 'fetch-details', requestId: item.id }); } catch { return; }
+  if (!r?.ok) return; // the normal path retries it
+  const res = await call('/ext/request-details', { requestId: item.id, fields: r.fields, buyer: r.buyer ?? item.buyerUsername, fast: true, item }).catch(() => null);
+  if (res?.status) await save({ lastDetails: { at: Date.now(), fields: r.fields, result: res } });
+}
+
+async function scanList() {
+  if (scanning || Date.now() < pauseUntil) return;
+  scanning = true;
+  try {
+    const { token, status } = await store(['token', 'status']);
+    if (!token || !status?.running || !status?.leader) { listSeeded = false; return; }
+    const [tab] = await eldoradoTabs();
+    if (!tab) return;
+    let r;
+    try { r = await chrome.tabs.sendMessage(tab.id, { type: 'poll-list' }); } catch { return; }
+    if (r?.rate) {
+      pauseUntil = Date.now() + 60_000;
+      call('/ext/report', { message: 'Eldorado asked to slow down; fast check paused for 1 minute' }).catch(() => {});
+      return;
+    }
+    if (!r?.ok) return;
+    const fresh = r.items.filter(i => i?.id && !seenRequests.has(i.id));
+    if (seenRequests.size > 5000) seenRequests.clear(), listSeeded = false;
+    for (const i of r.items) if (i?.id) seenRequests.add(i.id);
+    if (!listSeeded) { listSeeded = true; return; } // first look: these were already there
+    if (fresh.length) {
+      await Promise.all(fresh.map(i => handleNewRequest(tab.id, i)));
+      tick(); // sends the opener message straight away
+    }
+  } finally { scanning = false; }
+}
+setInterval(scanList, 2000);
 
 chrome.alarms.create('tick', { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener(a => { if (a.name === 'tick') tick(); });

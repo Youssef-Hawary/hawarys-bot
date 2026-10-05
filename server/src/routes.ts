@@ -525,17 +525,23 @@ api.post('/ext/poke', async c => c.json({ fresh: await pollNow() }));
 // The extension reports problems here so they show up in the Activity log.
 const lastReports = new Map<string, number>();
 api.post('/ext/report', async c => {
-  const { message } = await c.req.json();
+  const { message, level } = await c.req.json();
   const msg = String(message ?? '').slice(0, 300);
   const key = msg.replace(/[0-9a-f]{8}/g, '');
-  if (msg && Date.now() - (lastReports.get(key) ?? 0) > 120_000) { lastReports.set(key, Date.now()); log('warn', `🧩 Extension (${c.get('user').display_name}): ${msg}`); }
+  if (msg && Date.now() - (lastReports.get(key) ?? 0) > 120_000) { lastReports.set(key, Date.now()); log(level === 'info' ? 'info' : 'warn', `🧩 Extension (${c.get('user').display_name}): ${msg}`); }
   return c.json({ ok: true });
 });
 
 api.post('/ext/request-details', async c => {
   const b = await c.req.json();
   if (!b.requestId || !b.fields) return c.json({ error: 'requestId and fields required' }, 400);
-  await receiveDetails({ requestId: String(b.requestId), title: b.title, fields: b.fields, buyer: b.buyer, fast: !!b.fast });
+  const it = b.item && typeof b.item === 'object' ? b.item : null;
+  const item = it && String(it.id) === String(b.requestId) ? {
+    id: String(it.id), gameId: it.gameId == null ? '' : String(it.gameId), boostingCategoryId: String(it.boostingCategoryId ?? ''),
+    boostingCategoryTitle: String(it.boostingCategoryTitle ?? ''), createdDate: String(it.createdDate ?? ''),
+    buyerId: String(it.buyerId ?? ''), buyerUsername: String(it.buyerUsername ?? b.buyer ?? ''), isBuyerMuted: !!it.isBuyerMuted,
+  } : undefined;
+  await receiveDetails({ requestId: String(b.requestId), title: b.title, fields: b.fields, buyer: b.buyer, fast: !!b.fast, item });
   const row = db.prepare('SELECT status, reason, price FROM requests WHERE id = ?').get(String(b.requestId));
   return c.json(row);
 });

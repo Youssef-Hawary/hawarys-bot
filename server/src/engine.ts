@@ -99,8 +99,13 @@ export function ingestRequest(r: BoostingRequestItem) {
 }
 
 /** Details read from the request page by the extension. */
-export async function receiveDetails(input: { requestId: string; title?: string; fields: Record<string, string>; buyer?: string; fast?: boolean }) {
+export async function receiveDetails(input: { requestId: string; title?: string; fields: Record<string, string>; buyer?: string; fast?: boolean; item?: BoostingRequestItem }) {
   let row = db.prepare('SELECT * FROM requests WHERE id = ?').get(input.requestId) as any;
+  // The extension read this request from Eldorado's list itself: add it straight away, no waiting for the server's check.
+  if (!row && input.item?.id === input.requestId) {
+    ingestRequest(input.item);
+    row = db.prepare('SELECT * FROM requests WHERE id = ?').get(input.requestId) as any;
+  }
   if (!row && input.fast) {
     // Fast path: the extension read the details while the request list was still on its way. Wait for that list
     // (it has the game and buyer); if the request still isn't in it, the normal path will pick it up later.
@@ -171,6 +176,8 @@ export async function processRequest(id: string) {
   try {
     const offer = await eldorado.createOffer(id, q.price, q.delivery, text);
     set('offered', { price: q.price, hours: q.hours, offer_id: offer?.id ?? null, variant: opener?.id ?? null, offered_at: now() });
+    // The offer's own message isn't shown in the buyer's chat, so the opener also goes out as a chat message right away.
+    if (text) queue('opener', text, { requestId: id });
     log('success', `✅ Offered $${q.price} (${time}) on ${label}${since(row.created_at)}`);
     const d = getDiscord();
     if (d.newOffer) sendDiscord('📨 Offer sent', label, [{ name: 'Price', value: `$${q.price}`, inline: true }, { name: 'Delivery', value: time, inline: true }]).catch(() => {});

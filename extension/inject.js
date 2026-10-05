@@ -73,6 +73,7 @@
       super(...args);
       try {
         this.addEventListener('message', e => {
+          if (typeof e.data === 'string' && /oosting|otification/.test(e.data)) emit({ method: 'WS', url: String(this.url).split('?')[0], status: 101, reqBody: null, respBody: redact(e.data.replace(/\x1e/g, '').slice(0, 4000)) });
           if (typeof e.data === 'string' && e.data.includes('BoostingRequestCreated')) {
             const ids = [...new Set(e.data.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [])];
             window.postMessage({ __hb: 'boosting-event', ids }, location.origin);

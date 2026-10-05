@@ -90,6 +90,7 @@ function askPage(kind, payload, timeoutMs = 15000) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === 'probe-chat') { askPage('probe-chat', {}, 3000).then(reply); return true; }
+  if (msg.type === 'poll-list') { pollList().then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'fetch-details') { fetchDetails(msg.requestId).then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'create-keys') { createKeys().then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'send-chat') { askPage('send-chat', { conversationId: msg.conversationId, text: msg.text }, 40000).then(reply); return true; }
@@ -155,4 +156,16 @@ async function fetchDetails(requestId) {
     return { ok: true, fields, buyer };
   }
   return { ok: false, error: last };
+}
+
+// The newest boosting requests sent to you, read through Eldorado's own API (what its requests page uses).
+async function pollList() {
+  const { headers = {} } = await askPage('site-headers', {}, 3000);
+  const res = await fetch('/api/boostingOffers/me/boostingRequests/received?filter=ActiveRequests&pageSize=20', {
+    credentials: 'include', headers: { ...headers, Accept: 'application/json, text/plain, */*' },
+  });
+  if (res.status === 429) return { ok: false, rate: true };
+  if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+  const d = await res.json().catch(() => ({}));
+  return { ok: true, items: Array.isArray(d.results) ? d.results : [] };
 }
