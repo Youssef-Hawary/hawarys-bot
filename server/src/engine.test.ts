@@ -84,3 +84,44 @@ test('the opener carries the image of the request\'s game', async () => {
   const opener = db.prepare(`SELECT image FROM outbox WHERE request_id = ? AND kind = 'opener'`).get(id) as any;
   assert.equal(opener?.image, 'opener:lol');
 });
+
+test('a buyer answering cancels the follow-up and alerts only on the first message', async () => {
+  const { chatMessage, heartbeat, outboxFor, getMessages } = await import('./engine.ts');
+  setSetting('bot', { running: true, dryRun: false, pollSeconds: 10, maxOffersPerHour: 200, syncOnlineStatus: false, deadlineAlertHours: 2 });
+  setSetting('messages', { ...getMessages(), followUp: { enabled: true, delayMinutes: 0, text: 'still there {name}?' } });
+  (eldorado as any).createOffer = async () => ({ id: 'o5' });
+  const id = '55555555-5555-5555-5555-555555555555';
+  const item = { id, gameId: '32', boostingCategoryId: 'c', boostingCategoryTitle: 'Rank Boost', createdDate: new Date().toISOString(), buyerId: 'b5', buyerUsername: 'buyer5', isBuyerMuted: false };
+  await receiveDetails({ requestId: id, fields: { 'Current Rank': 'Gold 1', 'Desired Rank': 'Gold 3', Server: 'EU', 'Completion Method': 'Solo' }, fast: true, item: item as any });
+  db.prepare(`UPDATE requests SET conversation_id = 'conv-5' WHERE id = ?`).run(id);
+
+  assert.deepEqual(chatMessage({ conversationId: 'conv-5', text: 'my own message', sender: 'me', byMe: true }), { matched: false });
+  assert.deepEqual(chatMessage({ conversationId: 'conv-5', text: 'how long?', sender: 'buyer5', byMe: false }), { matched: true, first: true });
+  assert.deepEqual(chatMessage({ conversationId: 'conv-5', text: 'hello??', sender: 'buyer5', byMe: false }), { matched: true, first: false });
+  const fu = db.prepare(`SELECT status FROM outbox WHERE request_id = ? AND kind = 'follow_up'`).get(id) as any;
+  assert.equal(fu.status, 'dropped');
+  heartbeat('ext-5', { userId: 1, name: 'Owner', onEldorado: true, version: '9.9.9' });
+  assert.ok(!(await outboxFor('ext-5')).some((i: any) => i.request_id === id && i.kind === 'follow_up'));
+});
+
+test('an answer from a chat the bot has no id for yet is matched by the buyer name', async () => {
+  const { chatMessage } = await import('./engine.ts');
+  const id = '66666666-6666-6666-6666-666666666666';
+  db.prepare(`INSERT INTO requests (id, game, buyer, seen_at, status, offered_at) VALUES (?, 'valorant', 'buyer6', ?, 'offered', ?)`).run(id, Date.now(), Date.now());
+  assert.deepEqual(chatMessage({ conversationId: 'conv-6', text: 'hi', sender: 'buyer6', byMe: false }), { matched: true, first: true });
+  assert.equal((db.prepare('SELECT conversation_id FROM requests WHERE id = ?').get(id) as any).conversation_id, 'conv-6');
+});
+
+test('a new duo order asks for the in-game username, a solo order for the login', async () => {
+  const { upsertOrder } = await import('./engine.ts');
+  const order = (oid: string, requestId: string) => ({ id: oid, buyerUsername: 'b', buyerId: 'b', createdDate: new Date().toISOString(), totalPrice: { amount: 10 },
+    state: { state: 'Paid' }, talkJsConversationId: `c-${oid}`, orderOfferDetails: { offerTitle: 'Rank Boost', gameId: '32', boostingRequestId: requestId } });
+  db.prepare(`INSERT INTO requests (id, game, category, seen_at, details) VALUES ('rq-duo', 'valorant', 'Rank Boost', ?, ?)`)
+    .run(Date.now(), JSON.stringify({ fields: { 'Current Rank': 'Gold 1', 'Desired Rank': 'Gold 3', 'Completion Method': 'Duo' } }));
+  db.prepare(`INSERT INTO requests (id, game, category, seen_at, details) VALUES ('rq-solo', 'valorant', 'Rank Boost', ?, ?)`)
+    .run(Date.now(), JSON.stringify({ fields: { 'Current Rank': 'Gold 1', 'Desired Rank': 'Gold 3', 'Completion Method': 'Solo' } }));
+  upsertOrder(order('ord-duo', 'rq-duo'), true);
+  upsertOrder(order('ord-solo', 'rq-solo'), true);
+  assert.equal((db.prepare(`SELECT kind FROM outbox WHERE order_id = 'ord-duo'`).get() as any).kind, 'accepted_duo');
+  assert.equal((db.prepare(`SELECT kind FROM outbox WHERE order_id = 'ord-solo'`).get() as any).kind, 'accepted');
+});

@@ -148,6 +148,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
   if (msg.type === 'boosting-event') onBoostingEvent(msg.ids);
+  if (msg.type === 'chat-message' && msg.data?.conversationId && !msg.data.byMe) {
+    // Only the main browser reports, so the bot hears each message once.
+    store('status').then(({ status }) => { if (status?.leader) call('/ext/chat-message', msg.data).catch(() => {}); });
+  }
   if (msg.type === 'wake' && Date.now() - lastWake > 3500) { lastWake = Date.now(); tick(); }
   if (msg.type === 'tick') { tick().then(() => reply({ ok: true })); return true; }
 });
@@ -191,12 +195,29 @@ async function flushOutbox() {
         catch (e) { r = { ok: false, error: `Eldorado tab not ready (${String(e.message || e)}). Press F5 on it.` }; }
       }
       r ??= { ok: false, error: 'no chat to send it to' };
-      await call(`/ext/outbox/${item.id}`, { ok: !!r?.ok, error: r?.error });
+      await call(`/ext/outbox/${item.id}`, { ok: !!r?.ok, error: r?.error, conversationId });
     }
   } catch { /* next round */ }
   finally { sending = false; }
 }
 setInterval(flushOutbox, 3000);
+
+// ---- listening to chat: the main browser keeps a chat session open in its Eldorado tab so buyers' answers reach the bot ----
+let watching = false;
+async function watchChat() {
+  if (watching) return;
+  watching = true;
+  try {
+    const { token, status } = await store(['token', 'status']);
+    if (!token || !status?.leader) return;
+    const [tab] = await eldoradoTabs();
+    if (!tab) return;
+    const r = await chrome.tabs.sendMessage(tab.id, { type: 'watch-chat' }).catch(e => ({ ok: false, error: String(e.message || e) }));
+    if (!r?.ok) call('/ext/report', { message: `Can't listen to Eldorado chat: ${r?.error ?? 'unknown'}. Press F5 on the Eldorado tab.` }).catch(() => {});
+  } finally { watching = false; }
+}
+setInterval(watchChat, 60_000);
+setTimeout(watchChat, 5000);
 
 // ---- fast check: Eldorado's request list every 2 seconds, from the Eldorado tab ----
 // Works even when Eldorado's live feed doesn't announce a request. Only the main browser does it, only while the bot runs.

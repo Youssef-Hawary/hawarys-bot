@@ -10,7 +10,7 @@ import { backupNow } from './backup.ts';
 import { getDiscord, sendDiscord } from './discord.ts';
 import { analytics, workerSummary, workerPay, getFees, LIVE_STATES, type OrderRow } from './money.ts';
 import {
-  bus, log, changed, getBot, getMessages, setRunning, receiveDetails, heartbeat, liveClients, outboxFor, outboxResult, fill, isLeader,
+  bus, log, changed, getBot, getMessages, setRunning, receiveDetails, heartbeat, liveClients, outboxFor, outboxResult, chatMessage, fill, isLeader,
   pollNow, detailsFailed,
 } from './engine.ts';
 
@@ -627,9 +627,16 @@ api.post('/ext/request-url-template', async c => {
 
 api.get('/ext/outbox', async c => c.json(await outboxFor(String(c.req.query('clientId')))));
 api.post('/ext/outbox/:id', async c => {
-  const { ok, error } = await c.req.json();
-  outboxResult(Number(c.req.param('id')), !!ok, error);
+  const { ok, error, conversationId } = await c.req.json();
+  outboxResult(Number(c.req.param('id')), !!ok, error, typeof conversationId === 'string' && conversationId ? conversationId : undefined);
   return c.json({ ok: true });
+});
+
+// A chat message the extension saw in Eldorado chat (live). Only buyers' messages matter.
+api.post('/ext/chat-message', async c => {
+  const b = await c.req.json();
+  if (!b.conversationId) return c.json({ error: 'conversationId required' }, 400);
+  return c.json(chatMessage({ conversationId: String(b.conversationId), text: String(b.text ?? '').slice(0, 4000), sender: b.sender ? String(b.sender) : null, byMe: !!b.byMe }));
 });
 
 api.onError((err, c) => {

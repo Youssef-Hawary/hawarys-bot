@@ -248,6 +248,14 @@ export function tableFor(p: GamePricing, region: string | null): { table: Servic
   return own ? { table: own, name: region! } : { table: p.services, name: 'Global' };
 }
 
+/** Completion method (Solo / Duo), with hidden duo caught in the free text. */
+export function completionOf(req: NormalizedRequest, p: GamePricing = getPricing(req.game)) {
+  const desc = req.description ?? '';
+  const explicitDuo = /duo/i.test(req.completion ?? '');
+  const hiddenDuo = !explicitDuo && p.filters.catchHiddenDuo && HIDDEN_DUO_RE.test(desc) && !NOT_DUO_RE.test(desc);
+  return { completion: (explicitDuo || hiddenDuo ? 'duo' : 'solo') as 'duo' | 'solo', hiddenDuo };
+}
+
 export function quote(req: NormalizedRequest, p: GamePricing = getPricing(req.game)): Quote {
   if (!p.enabled) return { ok: false, reason: 'game turned off' };
   if (req.service === 'other') return { ok: false, reason: 'unknown order type' };
@@ -271,10 +279,7 @@ export function quote(req: NormalizedRequest, p: GamePricing = getPricing(req.ga
   // The highest rank the work touches, for "only up to" limits.
   const target = key === 'rank' ? to : from;
 
-  // Completion method (Solo / Duo), with hidden duo caught in the free text.
-  const explicitDuo = /duo/i.test(req.completion ?? '');
-  const hiddenDuo = !explicitDuo && p.filters.catchHiddenDuo && HIDDEN_DUO_RE.test(desc) && !NOT_DUO_RE.test(desc);
-  const completion = explicitDuo || hiddenDuo ? 'duo' : 'solo';
+  const { completion, hiddenDuo } = completionOf(req, p);
   const comp = s.completion[completion];
   const compLabel = completion === 'duo' ? (hiddenDuo ? 'Duo (found in description)' : 'Duo') : 'Solo';
   if (comp.skip) return { ok: false, reason: `${compLabel} is set to skip for ${info.label}` };

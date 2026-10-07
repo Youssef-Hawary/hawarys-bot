@@ -146,10 +146,11 @@ CREATE TABLE IF NOT EXISTS files (
 `);
 
 // Columns added after the first version.
-for (const [table, column, type] of [['outbox', 'image', 'TEXT']] as const) {
+for (const [table, column, type] of [['outbox', 'image', 'TEXT'], ['requests', 'conversation_id', 'TEXT'], ['requests', 'replied_at', 'INTEGER']] as const) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   if (!cols.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
+db.exec('CREATE INDEX IF NOT EXISTS requests_conversation ON requests (conversation_id)');
 
 export function getSetting<T>(key: string, fallback: T): T {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;

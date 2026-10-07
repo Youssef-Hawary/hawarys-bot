@@ -72,7 +72,7 @@ export function AutoChat() {
 
           <OpenerImages />
 
-          <Section title="Follow-up" subtitle="One nudge if the buyer hasn't picked anyone yet. Dropped automatically if the request is won/lost or it's more than 12h late."
+          <Section title="Follow-up" subtitle="One nudge if the buyer hasn't picked anyone yet. Not sent if the buyer answers in chat, the request is won/lost, or it's more than 12h late."
             actions={<Toggle checked={m.followUp.enabled} onChange={v => set(x => { x.followUp.enabled = v; })} />}>
             <div className={clsx('space-y-3', !m.followUp.enabled && 'opacity-50')}>
               <Field label="Wait before sending (minutes)" className="max-w-[220px]"><Num value={m.followUp.delayMinutes} onChange={v => set(x => { x.followUp.delayMinutes = v; })} /></Field>
@@ -80,12 +80,13 @@ export function AutoChat() {
             </div>
           </Section>
 
-          {([['accepted', 'Order accepted', 'The moment the buyer accepts and the order is created.'],
+          {([['accepted', 'Order accepted (Solo)', 'The moment a solo order is created: ask for the account login.'],
+             ['acceptedDuo', 'Order accepted (Duo)', 'The moment a duo order is created: ask for the buyer\'s in-game username instead.'],
              ['delivered', 'Order delivered', 'When someone marks the order delivered (here or on Eldorado).'],
              ['received', 'Order received', 'When the buyer confirms. The best time to ask for a review.']] as const).map(([key, title, sub]) => (
             <Section key={key} title={title} subtitle={sub} actions={<Toggle checked={m[key].enabled} onChange={v => set(x => { x[key].enabled = v; })} />}>
               <div className={clsx(!m[key].enabled && 'opacity-50')}>
-                <MessageBox value={m[key].text} onChange={v => set(x => { x[key].text = v; })} vars={key === 'accepted' ? VARS.slice(0, 2) : nameOnly} />
+                <MessageBox value={m[key].text} onChange={v => set(x => { x[key].text = v; })} vars={key === 'accepted' || key === 'acceptedDuo' ? VARS.slice(0, 2) : nameOnly} />
               </div>
             </Section>
           ))}

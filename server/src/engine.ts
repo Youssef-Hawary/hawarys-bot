@@ -2,7 +2,7 @@
 import { EventEmitter } from 'node:events';
 import { db, getSetting, setSetting, now } from './db.ts';
 import { eldorado, hasCreds, EldoradoError, type BoostingRequestItem } from './eldorado.ts';
-import { detectGame, normalizeRequest, quote } from './pricing.ts';
+import { completionOf, detectGame, normalizeRequest, quote } from './pricing.ts';
 import { type Game, rankIndex } from './ranks.ts';
 import { getDiscord, sendDiscord } from './discord.ts';
 import { analytics } from './money.ts';
@@ -18,6 +18,7 @@ export type Messages = {
   openers: { id: string; enabled: boolean; text: string }[];
   followUp: Template & { delayMinutes: number };
   accepted: Template;
+  acceptedDuo: Template;
   delivered: Template;
   received: Template;
 };
@@ -28,6 +29,7 @@ export const getMessages = () => getSetting<Messages>('messages', {
   ],
   followUp: { enabled: false, delayMinutes: 20, text: "Hi {name}, just checking in. I'm online and can start your boost right away if you accept my offer 🙂" },
   accepted: { enabled: true, text: "Thanks for your order {name}! Please send your login details here so we can start right away." },
+  acceptedDuo: { enabled: true, text: "Thanks for your order {name}! Since it's a duo boost, please send your in-game username (Riot ID, like Name#TAG) so we can add you and start right away." },
   delivered: { enabled: true, text: "All done {name}! Your order is delivered. Please check and confirm with the Order Received button 🙏" },
   received: { enabled: true, text: "Thank you {name}! It was a pleasure. A review helps us a lot, and we're here whenever you need another boost." },
 });
@@ -235,6 +237,7 @@ export function upsertOrder(o: any, alert: boolean) {
   }
   const game = gameFor({ gameId: d.gameId, title: `${d.gameCategoryTitle ?? ''} ${title}` });
   const msgs = getMessages();
+  const duo = isDuoOrder(d.boostingRequestId, title);
   const name = o.buyerUsername;
 
   if (!existing) {
@@ -249,7 +252,9 @@ export function upsertOrder(o: any, alert: boolean) {
         { name: 'Buyer', value: name ?? '?', inline: true }, { name: 'Price', value: `$${o.totalPrice?.amount}`, inline: true },
         { name: 'Deadline', value: span ? `<t:${Math.floor((created + span) / 1000)}:R>` : '?', inline: true },
       ]).catch(e => log('warn', `Discord: ${e.message}`));
-      if (msgs.accepted.enabled && state === 'Paid') queue('accepted', fill(msgs.accepted.text, { name, price: o.totalPrice?.amount }), { orderId: o.id, conversationId: o.talkJsConversationId });
+      // Solo: ask for the account login. Duo: the buyer plays too, so ask for their in-game username instead.
+      const welcome = duo ? msgs.acceptedDuo : msgs.accepted;
+      if (welcome.enabled && state === 'Paid') queue(duo ? 'accepted_duo' : 'accepted', fill(welcome.text, { name, price: o.totalPrice?.amount }), { orderId: o.id, conversationId: o.talkJsConversationId });
     }
   } else if (existing.state !== state) {
     const extra = state === 'Delivered' ? ', delivered_at = COALESCE(delivered_at, ?)' : ['Received', 'Completed'].includes(state) ? ', completed_at = COALESCE(completed_at, ?)' : '';
@@ -265,6 +270,17 @@ export function upsertOrder(o: any, alert: boolean) {
     }
   }
   changed('orders');
+}
+
+/** Duo order? Read from the boosting request it came from (Completion Method, or "duo" in the description),
+ * otherwise from the order title (orders bought straight from a listing). */
+function isDuoOrder(requestId: string | null | undefined, title: string) {
+  const req = requestId ? db.prepare('SELECT game, category, details FROM requests WHERE id = ?').get(requestId) as any : null;
+  if (req?.game && req.details) {
+    const details = JSON.parse(req.details);
+    return completionOf(normalizeRequest(req.game, `${req.category ?? ''} ${details.title ?? ''}`, details.fields ?? {})).completion === 'duo';
+  }
+  return /\bduo\b/i.test(title);
 }
 
 async function pollOrders() {
@@ -440,12 +456,16 @@ export async function outboxFor(clientId: string) {
   for (const it of items) {
     // Messages older than 12h no longer fit the conversation.
     if (now() - it.not_before > 12 * 3600_000) { db.prepare(`UPDATE outbox SET status = 'dropped', error = 'too old' WHERE id = ?`).run(it.id); continue; }
+    if (it.kind === 'follow_up' && it.request_id && db.prepare('SELECT 1 FROM requests WHERE id = ? AND replied_at IS NOT NULL').get(it.request_id)) {
+      db.prepare(`UPDATE outbox SET status = 'dropped', error = 'buyer already answered' WHERE id = ?`).run(it.id); changed('outbox'); continue;
+    }
     if (!it.conversation_id && it.request_id && hasCreds() && !it.error) {
       try {
         const conv = await eldorado.createConversation(it.request_id);
         it.conversation_id = conv?.talkJsConversationId ?? conv?.conversationId ?? null;
         if (!it.conversation_id) throw new Error(`no chat id in Eldorado's reply (${Object.keys(conv ?? {}).join(', ') || 'empty'})`);
         db.prepare('UPDATE outbox SET conversation_id = ? WHERE id = ?').run(it.conversation_id, it.id);
+        rememberConversation(it.request_id, it.conversation_id);
       } catch (e) {
         // Not fatal: the extension will try to open the chat from the Eldorado tab instead.
         it.error = `bot couldn't open the chat: ${(e as Error).message}`;
@@ -459,9 +479,47 @@ export async function outboxFor(clientId: string) {
   return ready;
 }
 
-export function outboxResult(id: number, ok: boolean, error?: string) {
-  db.prepare(`UPDATE outbox SET status = ?, sent_at = ?, error = ? WHERE id = ?`).run(ok ? 'sent' : 'failed', now(), error ?? null, id);
-  const it = db.prepare('SELECT kind, order_id, request_id FROM outbox WHERE id = ?').get(id) as any;
+export function outboxResult(id: number, ok: boolean, error?: string, conversationId?: string) {
+  db.prepare(`UPDATE outbox SET status = ?, sent_at = ?, error = ?, conversation_id = COALESCE(conversation_id, ?) WHERE id = ?`)
+    .run(ok ? 'sent' : 'failed', now(), error ?? null, conversationId ?? null, id);
+  const it = db.prepare('SELECT kind, order_id, request_id, conversation_id FROM outbox WHERE id = ?').get(id) as any;
+  if (it?.request_id && it.conversation_id) rememberConversation(it.request_id, it.conversation_id);
   log(ok ? 'success' : 'error', ok ? `💬 Sent ${it?.kind?.replace('_', '-')} message` : `💬 Message failed: ${error}`);
   changed('outbox');
+}
+
+/** Which request a chat belongs to, so a buyer's answer can be matched to it. */
+function rememberConversation(requestId: string, conversationId: string) {
+  db.prepare('UPDATE requests SET conversation_id = ? WHERE id = ? AND conversation_id IS NULL').run(conversationId, requestId);
+}
+
+/** A chat message seen by the extension. When a buyer answers our opener/follow-up for the first time:
+ * their pending follow-up is cancelled and Discord gets one alert with what they wrote. Later messages: nothing. */
+export function chatMessage(m: { conversationId: string; text: string; sender: string | null; byMe: boolean }) {
+  if (m.byMe || !m.conversationId) return { matched: false };
+  let req = db.prepare(`SELECT * FROM requests WHERE conversation_id = ?`).get(m.conversationId) as any;
+  // Chat id not known yet (e.g. the opener went out without one): match the buyer's name to an offer from the last day.
+  if (!req && m.sender) {
+    req = db.prepare(`SELECT * FROM requests WHERE buyer = ? AND status = 'offered' AND conversation_id IS NULL AND offered_at > ? ORDER BY offered_at DESC LIMIT 1`)
+      .get(m.sender, now() - 24 * 3600_000) as any;
+    if (req) rememberConversation(req.id, m.conversationId);
+  }
+  if (!req || req.status !== 'offered') return { matched: false };
+
+  const dropped = db.prepare(`UPDATE outbox SET status = 'dropped', error = 'buyer answered' WHERE status = 'pending' AND kind = 'follow_up' AND request_id = ?`).run(req.id);
+  if (dropped.changes) changed('outbox');
+  // Only the buyer's first answer counts (the UPDATE is the lock, so two extensions can't both alert).
+  if (!db.prepare('UPDATE requests SET replied_at = ? WHERE id = ? AND replied_at IS NULL').run(now(), req.id).changes) return { matched: true, first: false };
+  changed('requests');
+
+  const buyer = req.buyer ?? m.sender ?? 'A buyer';
+  const said = m.text.trim() || '(sent a picture or file)';
+  const details = req.details ? JSON.parse(req.details) : null;
+  const n = req.game && details ? normalizeRequest(req.game, `${req.category ?? ''} ${details.title ?? ''}`, details.fields ?? {}) : null;
+  const label = `${req.game === 'lol' ? 'LoL' : 'Valorant'} ${n?.currentRank ?? ''} → ${n?.desiredRank ?? ''} ${n?.region ?? ''}`.replace(/\s+/g, ' ');
+  log('info', `💬 ${buyer} answered: "${said.slice(0, 120)}"${dropped.changes ? ' (follow-up cancelled)' : ''}`);
+  if (getDiscord().clientReplies) sendDiscord(`💬 ${buyer} answered. Go check the chat!`, said.slice(0, 1500), [
+    { name: 'Request', value: label, inline: true }, ...(req.price != null ? [{ name: 'Our offer', value: `$${req.price}`, inline: true }] : []),
+  ], 0x34d399).catch(e => log('warn', `Discord: ${e.message}`));
+  return { matched: true, first: true };
 }

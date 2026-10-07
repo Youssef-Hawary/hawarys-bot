@@ -117,7 +117,34 @@
     try { chat?.session?.destroy?.(); } catch { /* ignore */ }
     const session = new window.Talk.Session({ appId: TALK_APP_ID, me: new window.Talk.User(userId), tokenFetcher: chatToken });
     chat = { session, userId, at: Date.now() };
+    listen(session, userId);
     return session;
+  }
+
+  // ---- incoming chat: tell the bot when a buyer writes (it cancels the follow-up and pings Discord) ----
+  function listen(session, userId) {
+    const report = (conversationId, text, senderId, sender, byMe) => {
+      if (!conversationId) return;
+      window.postMessage({ __hb: 'chat-message', data: { conversationId: String(conversationId), text: String(text ?? ''), sender: sender ?? null, byMe: !!byMe || String(senderId) === String(userId) } }, location.origin);
+    };
+    try {
+      if (typeof session.onMessage === 'function') {
+        // Fires for new messages in all of this account's chats, not only the open one.
+        session.onMessage(m => report(m?.conversation?.id ?? m?.conversationId, m?.body ?? m?.text, m?.senderId ?? m?.sender?.id, m?.sender?.name, m?.isByMe));
+      } else if (typeof session.subscribeConversations === 'function') {
+        const seen = new Map(); // conversation → last message id, so the first snapshot doesn't count as new
+        let first = true;
+        session.subscribeConversations(snap => {
+          for (const c of snap?.conversations ?? []) {
+            const last = c?.lastMessage;
+            if (!last || seen.get(c.id) === last.id) continue;
+            seen.set(c.id, last.id);
+            if (!first) report(c.id, last.plaintext ?? last.content?.map?.(x => x?.text ?? '').join(' '), last.sender?.id, last.sender?.name, false);
+          }
+          first = false;
+        });
+      }
+    } catch { /* listening is best-effort; sending still works */ }
   }
 
   async function sendText(session, conversationId, text) {
@@ -163,6 +190,10 @@
     const { __hb: kind, id } = e.data;
     if (kind === 'site-headers') window.postMessage({ __hb: 'site-headers-result', id, headers: { ...siteHeaders } }, location.origin);
     if (kind === 'probe-chat') window.postMessage({ __hb: 'probe-chat-result', id, ok: true }, location.origin);
+    if (kind === 'watch-chat') {
+      try { await chatSession(); window.postMessage({ __hb: 'watch-chat-result', id, ok: true }, location.origin); }
+      catch (err) { chat = null; window.postMessage({ __hb: 'watch-chat-result', id, ok: false, error: String(err?.message || err) }, location.origin); }
+    }
     if (kind === 'send-chat') {
       try {
         await sendChat(e.data.conversationId, e.data.text, e.data.image);

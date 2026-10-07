@@ -60,6 +60,7 @@ export function SettingsPage() {
               <Toggle checked={s.discord.newOrder} onChange={v => set(x => { x.discord.newOrder = v; })} label="New orders" />
               <Toggle checked={s.discord.deadlines} onChange={v => set(x => { x.discord.deadlines = v; })} label="Deadline warnings" />
               <Toggle checked={s.discord.newOffer} onChange={v => set(x => { x.discord.newOffer = v; })} label="Every offer sent" hint="Can be noisy" />
+              <Toggle checked={s.discord.clientReplies} onChange={v => set(x => { x.discord.clientReplies = v; })} label="Buyer answered" hint="Their first message after the opener/follow-up" />
               <Toggle checked={s.discord.dailyReport} onChange={v => set(x => { x.discord.dailyReport = v; })} label="Daily report" />
             </div>
             <Field label="Daily report hour (0–23, server time)" className="max-w-[220px]"><Num min={0} value={s.discord.dailyReportHour} onChange={v => set(x => { x.discord.dailyReportHour = Math.min(23, Math.max(0, v)); })} /></Field>

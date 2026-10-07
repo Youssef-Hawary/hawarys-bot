@@ -68,6 +68,11 @@ window.addEventListener('message', e => {
 // (Chrome's own timers can't run more often than every 30 seconds).
 setInterval(() => chrome.runtime.sendMessage({ type: 'wake' }).catch(() => {}), 4000);
 
+// A chat message arrived (page → background → bot).
+window.addEventListener('message', e => {
+  if (e.source === window && e.data?.__hb === 'chat-message') chrome.runtime.sendMessage({ type: 'chat-message', data: e.data.data }).catch(() => {});
+});
+
 // Recorder relay (page → background)
 window.addEventListener('message', e => {
   if (e.source === window && e.data?.__hb === 'capture') chrome.runtime.sendMessage({ type: 'capture', data: e.data.data }).catch(() => {});
@@ -89,6 +94,7 @@ function askPage(kind, payload, timeoutMs = 15000) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+  if (msg.type === 'watch-chat') { askPage('watch-chat', {}, 30000).then(reply); return true; }
   if (msg.type === 'probe-chat') { askPage('probe-chat', {}, 3000).then(reply); return true; }
   if (msg.type === 'open-chat') { openChat(msg.requestId).then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }
   if (msg.type === 'poll-list') { pollList().then(reply, e => reply({ ok: false, error: String(e.message || e) })); return true; }

@@ -4,6 +4,7 @@ export type DiscordSettings = {
   webhook: string;
   newOrder: boolean;
   newOffer: boolean;
+  clientReplies: boolean;    // a buyer answered the opener/follow-up (first message only)
   deadlines: boolean;
   dailyReport: boolean;
   dailyReportHour: number;   // server local time
@@ -11,7 +12,7 @@ export type DiscordSettings = {
 };
 
 export const getDiscord = () => getSetting<DiscordSettings>('discord', {
-  webhook: '', newOrder: true, newOffer: false, deadlines: true, dailyReport: true, dailyReportHour: 23, dashboardUrl: '',
+  webhook: '', newOrder: true, newOffer: false, clientReplies: true, deadlines: true, dailyReport: true, dailyReportHour: 23, dashboardUrl: '',
 });
 
 const CYAN = 0x38c6f4;
