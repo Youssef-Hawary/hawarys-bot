@@ -1,10 +1,10 @@
-// Backups: copies the live database into data/backups and keeps the newest 14 daily ones.
+// Backups: copies the live database into <data folder>/backups and keeps the newest 14 daily ones.
 // Runs once a day while the bot runs (index.ts), or by hand: node src/backup.ts
 import { mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { db } from './db.ts';
+import { db, DATA_DIR } from './db.ts';
 
-const dir = resolve(import.meta.dirname, '../data/backups');
+const dir = resolve(DATA_DIR, 'backups');
 
 export function backupNow() {
   mkdirSync(dir, { recursive: true });

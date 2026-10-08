@@ -6,6 +6,7 @@ import { relative, resolve } from 'node:path';
 import { api } from './routes.ts';
 import { startEngine, log } from './engine.ts';
 import { backupNow } from './backup.ts';
+import { lanLinks } from './network.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const WEB_DIST = resolve(import.meta.dirname, '../../web/dist');
@@ -32,6 +33,8 @@ if (existsSync(WEB_DIST)) {
 
 serve({ fetch: app.fetch, port: PORT, hostname: process.env.HOST ?? '127.0.0.1' }, info => {
   console.log(`Hawary's Bot listening on http://${info.address}:${info.port}`);
+  // (The desktop launcher prints its own friendlier version of this.)
+  if (process.env.HB_DESKTOP !== '1') for (const l of lanLinks(PORT)) console.log(`  ${l.kind === 'hotspot' ? 'Hotspot devices' : 'Other PCs/phones'}: ${l.url}  (${l.adapter})`);
   log('info', '🚀 Server started');
   startEngine();
   // Daily copy of the database in server/data/backups (newest 14 kept).

@@ -1,0 +1,8 @@
+{
+  "name": "hawarys-bot-desktop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test lib.test.ts"
+  }
+}

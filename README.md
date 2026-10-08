@@ -2,20 +2,46 @@
 
 An Eldorado.gg boosting bot with a team dashboard, for Valorant and League of Legends.
 
-```
-server/     Node API + bot engine + SQLite (no build step, Node ≥ 23.6)
-web/        Dashboard (React + Vite + Tailwind, WebGL background)
-extension/  Chrome extension: reads request pages, records Eldorado calls, sends chat messages
-deploy/     Server setup (systemd + Caddy HTTPS + daily backups)
-ELDORADO_API.md   What the official Seller API can do (from Swagger)
-legacy/     First Python prototype (not used)
-```
+## Install on the bot PC (Windows)
+
+1. Download **[HawarysBot-Setup.exe](https://github.com/Youssef-Hawary/hawarys-bot/releases/latest/download/HawarysBot-Setup.exe)** and open it.
+   If Windows says *"Windows protected your PC"*, click **More info → Run anyway** (the installer isn't code-signed).
+2. Click **Next** until it's done. When Windows asks for permission (the firewall step), click **Yes**, so the other PCs can connect.
+3. The bot starts and opens **its own browser** with Eldorado and the dashboard.
+
+**First time only:** create the owner account in the dashboard, log in to your Eldorado seller account in that browser,
+then click the extension icon (puzzle piece → Hawary's Bot) → **Connect Eldorado API (owner)**.
+The extension is already installed and connected, nothing else to set up.
+
+**Every day:** double-click the **Hawary's Bot** icon on the desktop. That's all. It updates itself when it starts.
+
+No GitHub, no Node.js, no `npm`, no "Developer mode".
+
+## Workers
+
+Nothing to install. They open the **Workers' link** (dashboard → *Team & pay*), for example `http://192.168.88.5:8787`,
+on any PC or phone on the same network (same router or Wi-Fi), and log in with the account you made for them.
+Save it as a bookmark. They use Eldorado in their normal browser as usual.
+
+## Good to know
+
+- A small **Hawary's Bot** window starts minimized in the taskbar. Keep it open: closing it stops the bot.
+  The PC won't go to sleep while the bot runs.
+- Use the bot's own browser for the Eldorado tab the bot works with. Your normal Chrome isn't touched.
+- Your data (accounts, prices, orders, backups, the bot browser's Eldorado login) is in the `data` folder of the install folder
+  (default `%LOCALAPPDATA%\Programs\HawarysBot\data`). Updates and reinstalls never touch it.
+- **Café PCs that reset on restart** (Deep Freeze and similar): install to a drive that keeps its files, like `D:\HawarysBot`.
+  The installer asks where to install.
+- **Coming from the old ZIP + `start.bat` setup:** close the old black window first. On its first start the app copies your old data
+  automatically (it looks for `hawarys-bot*` folders in Documents, Desktop and Downloads). If it can't find it, use
+  *Settings → Download settings* in the old one and *Load settings* in the new one.
+- If the bot ever can't start, the window stays open with the error. Take a screenshot and send it to Claude.
 
 ## How it works
 
 1. **Server** polls Eldorado's official Seller API for new boosting requests and orders (Start/Stop button).
-2. The request list has no ranks, so the **extension** (in any teammate's Chrome with an Eldorado tab) opens new
-   requests in a hidden window and reads *Current Rank / RR / Desired Rank / Server / Completion Method*.
+2. The request list has no ranks, so the **extension** (in the bot's browser, with an Eldorado tab open) reads
+   *Current Rank / RR / Desired Rank / Server / Completion Method* through Eldorado's own site.
 3. The server prices the request using **Pricing** (per game) and sends the offer through the API, with the
    opening message (A/B test). In **dry run** it only logs what it *would* offer.
 4. New orders → Discord alert → a worker opens the **Order board** and clicks **Take**. Deliver/cancel/extend go
@@ -23,51 +49,33 @@ legacy/     First Python prototype (not used)
 5. Money: Eldorado fee % (Settings) + each worker's pay type (% / per division / fixed / manual) → profit,
    what you owe each worker, payouts. Workers only see their own money.
 
-## Start on a new Windows PC (step by step)
+## Project layout
 
-GitHub only stores the code. The bot itself runs on your PC, so that PC is the "server" for now:
-keep it on, with Chrome open on Eldorado. (Later it can move to a real server so it runs 24/7 and workers can log in from their own PCs.)
+```
+server/     Node API + bot engine + SQLite (no build step, Node ≥ 23.6)
+web/        Dashboard (React + Vite + Tailwind, WebGL background)
+extension/  Chrome extension: reads request details, records Eldorado calls, sends chat messages
+desktop/    Windows launcher: starts the bot, opens the bot's browser, self-updates (launch.cjs → main.ts)
+installer/  Inno Setup script + which Node/Chrome the installer ships (runtime.json)
+scripts/    Packaging (package_windows.py, make_ico.py, zip_extension.py)
+deploy/     Linux server setup (systemd + Caddy HTTPS + daily backups)
+ELDORADO_API.md   What the official Seller API can do (from Swagger)
+legacy/     First Python prototype (not used)
+```
 
-**A. Install (once)**
-1. Install **Node.js**: go to <https://nodejs.org>, click the big **LTS** download, install with all defaults.
-2. On this GitHub page click the green **Code** button → **Download ZIP**. Right-click the ZIP → **Extract All** → put it somewhere easy, e.g. `Documents\hawarys-bot`.
-3. Open that folder (the one with `README.md` in it). Click the address bar at the top of the window, type `cmd`, press Enter. A black window opens.
-4. In it, type these one at a time and wait for each to finish:
-   ```
-   npm run setup
-   npm run build
-   ```
+## Releases and updates
 
-**B. Start the bot** (do this every time you turn the PC on)
-1. Open the folder → address bar → `cmd` → Enter → type `npm start`. Leave the black window open (closing it stops the bot).
-2. In Chrome open <http://127.0.0.1:8787>. The first time, it asks you to create the **owner** account (pick a strong password).
+Every push to `master` builds the installer on GitHub Actions (`.github/workflows/windows-app.yml`) and publishes a
+release `v1.0.<build>` with `HawarysBot-Setup.exe`, `app.zip` and `manifest.json`.
+When the bot starts it reads the latest `manifest.json`: if there's a newer version it downloads the small `app.zip`
+(checked with SHA-256), switches to it and keeps the previous version. If a new version fails to start, it goes back
+to the previous one automatically and skips that version.
 
-**C. Chrome extension (once)**
-1. In Chrome go to `chrome://extensions`, turn on **Developer mode** (top right), click **Load unpacked**, pick the `extension` folder inside the bot folder.
-2. Click the puzzle icon → pin **Hawary's Bot**. Click it: Dashboard address `http://127.0.0.1:8787`, your owner username + password → **Connect** → **Allow**.
+The installer ships Node.js and **Chrome for Testing** (branded Chrome no longer allows loading an extension from the
+command line). To give every install a newer Node/Chrome, bump `rev` in `installer/runtime.json`: installs then run
+the full installer once, silently.
 
-**D. Connect Eldorado (once)**
-1. Open <https://www.eldorado.gg>, log in to your seller account. Keep the site language **English**.
-2. Click the extension → **Connect Eldorado API (owner)**. You should see ✅ *Eldorado API connected*.
-3. Open any boosting request on Eldorado once (so the bot learns where request pages are).
-
-**E. Test safely (dry run)**
-1. Dashboard → **Settings**: set the Eldorado fee %, check that **Dry run** is ON. Optional: Discord webhook for "new order" alerts.
-2. Dashboard → **Pricing**: set your prices, use *Test a request* on the right to check them.
-3. Dashboard → **Overview** → **Start bot**. New requests now show up in **Live offers** as *would offer $X* — nothing is sent to buyers yet.
-4. Settings → Extension → **Recorder ON**, then on Eldorado open a request and send one chat message to any buyer. Turn the Recorder off.
-   Send Claude/the developer a screenshot of the recorded list so chat sending can be matched to Eldorado.
-
-**F. Go live**
-When the would-offer prices look right for a day: Settings → **Dry run OFF**. The bot now sends real offers with your opening message.
-New orders appear on the **Order board**; click **Take** to claim one.
-
-**Keep in mind:** the PC must not sleep (Windows Settings → System → Power → Sleep: *Never*), Chrome stays open with one Eldorado tab,
-and the black `npm start` window stays open. Workers can only use it from *this* PC until it moves to a server.
-
-**Updating later:** close the bot, double-click `update.bat` (backs up `server\data`, downloads the new version, keeps all your settings), reload the extension in `chrome://extensions`, then double-click `start.bat`.
-
-## Try it with demo data
+## Development
 
 ```bash
 npm run setup     # once
@@ -76,22 +84,11 @@ npm run demo      # fake orders/workers in server/data/demo.db → http://127.0.
 ```
 Log in as `hawary / demo1234` (owner) or `ahmed / demo1234` (worker).
 
-Real mode: `npm start` (empty database, creates the owner account on first visit).
+Real mode: `npm start` (empty database, creates the owner account on first visit; only this PC can open it,
+set `HOST=0.0.0.0` to allow the network).
 For live UI development: `npm start` in one terminal and `npm --prefix web run dev` in another (http://localhost:5173).
 
-## Going live
-
-1. **Server**: Hetzner Cloud → cheapest shared x86 with 2 vCPU / 4 GB → Ubuntu 24.04 → Germany/Finland.
-2. **Domain**: add an **A record** `bot` → your server's IPv4 where you manage `hawarystore.com` (gives `bot.hawarystore.com`).
-3. Copy this folder to the server and run: `sudo bash deploy/setup.sh bot.hawarystore.com`
-   (installs Node, Caddy with automatic HTTPS, firewall, the service and daily backups).
-4. Open the site → create the owner account → **Settings**: paste the Eldorado Client ID/Secret
-   (or click **Connect Eldorado API** in the extension), Discord webhook, Eldorado fee %.
-5. **Team & pay** → add workers. Each teammate loads the extension (Settings → Download), logs in, keeps one Eldorado tab open.
-6. Open any boosting request on Eldorado once (so the extension learns the page address), keep **dry run** on,
-   watch **Live offers** for a while, then turn dry run off.
-
-Updates later: copy the new code and run `sudo bash deploy/update.sh`.
+`npm test` runs the pricing, network and launcher tests (including the Platinum I → Diamond I example).
 
 ## Extension recorder
 
@@ -99,6 +96,14 @@ Settings → Extension → **Recorder** on, then use Eldorado normally (open req
 Eldorado's own API calls show up in the list (passwords/tokens/emails are redacted). That is how new features
 (e.g. a direct request-details endpoint, chat sending) get wired up. Turn it off when done.
 
-## Tests
+## Running it on a server instead (optional)
 
-`npm test` runs the pricing tests (including the Platinum I → Diamond I example).
+1. **Server**: any VPS with Ubuntu 24.04 and 1–2 GB RAM (add swap on 1 GB before setup).
+2. **Domain**: add an **A record** `bot` → your server's IPv4 where you manage `hawarystore.com` (gives `bot.hawarystore.com`).
+3. Copy this folder to the server and run: `sudo bash deploy/setup.sh bot.hawarystore.com`
+   (installs Node, Caddy with automatic HTTPS, firewall, the service and daily backups).
+4. Open the site → create the owner account → **Settings**: Eldorado keys, Discord webhook, Eldorado fee %.
+5. Request details and chat still need the extension in one Chrome with an Eldorado tab
+   (dashboard → Settings → Extension → Download, then load it unpacked and log in).
+
+Updates later: copy the new code and run `sudo bash deploy/update.sh`.

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { UserPlus, Pencil, HandCoins, History } from 'lucide-react';
 import { api, useData, usd } from '../api.ts';
 import { Avatar, Badge, Button, Card, Field, Modal, Num, PageHeader, Toggle, clsx, useAction } from '../components/ui.tsx';
+import { WorkerLink } from '../components/WorkerLink.tsx';
 
 const PAY_TYPES = [
   { id: 'percent', label: '% of each order', unit: '%', hint: 'Percent of the order price after Eldorado’s fee' },
@@ -23,6 +24,8 @@ export function Team() {
     <>
       <PageHeader title="Team & pay" subtitle={`You owe the team ${usd(totals.owed)} right now · ${usd(totals.paid)} paid out so far.`}
         actions={<Button variant="primary" icon={<UserPlus size={16} />} onClick={() => setAdding(true)}>Add worker</Button>} />
+
+      <WorkerLink className="mb-5" />
 
       <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
         {(data ?? []).map(u => (
