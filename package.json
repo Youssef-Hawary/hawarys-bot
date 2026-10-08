@@ -6,6 +6,6 @@
     "build": "(python3 scripts/zip_extension.py || python scripts/zip_extension.py || echo Skipped extension zip: load the extension folder unpacked instead) && npm --prefix web run build",
     "start": "npm --prefix server start",
     "demo": "npm --prefix server run demo",
-    "test": "npm --prefix server test"
+    "test": "npm --prefix server test && node --test desktop/lib.test.ts"
   }
 }

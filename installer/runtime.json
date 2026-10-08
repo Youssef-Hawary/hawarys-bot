@@ -1,0 +1,6 @@
+{
+  "_comment": "Node and the bot's browser that the installer ships. Bump rev to push a newer Node/Chrome to every install (they get the full installer once); normal updates only replace the app.",
+  "rev": 1,
+  "node": "24",
+  "chrome": "Stable"
+}

@@ -8,3 +8,4 @@ legacy/config.toml
 legacy/state.db
 __pycache__/
 web/public/hawarys-bot-extension.zip
+extension/local.json

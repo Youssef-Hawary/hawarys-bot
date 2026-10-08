@@ -69,13 +69,27 @@ async function flushCaptures() {
   try { await call('/ext/captures', batch); } catch { /* recorder is best-effort */ }
 }
 
+// Desktop app: in the bot's own browser the launcher puts local.json next to the extension,
+// so it connects itself to the dashboard as the owner. No address or password to type.
+async function autoPair() {
+  let local;
+  try { local = await (await fetch(chrome.runtime.getURL('local.json'))).json(); } catch { return false; } // normal Chrome: no file
+  try {
+    const res = await fetch(`${local.server}/api/ext/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret: local.secret }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { await save({ server: local.server, status: { ok: false, at: Date.now(), error: data.error || `Auto-connect failed (HTTP ${res.status})` } }); return false; }
+    await save({ server: local.server, token: data.token, status: { ok: true, at: Date.now(), user: data.user } });
+    return true;
+  } catch { return false; } // bot not running yet
+}
+
 async function tick() {
   if (ticking) { again = true; return; }
   ticking = true;
   again = false;
   try {
     const { token } = await store('token');
-    if (!token) return;
+    if (!token && !(await autoPair())) return;
     const id = await clientId();
     const tabs = await eldoradoTabs();
     const hb = await call('/ext/heartbeat', { clientId: id, onEldorado: tabs.length > 0, version: VERSION });

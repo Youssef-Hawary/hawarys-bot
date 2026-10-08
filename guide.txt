@@ -1,85 +1,71 @@
-HAWARY'S BOT - SETUP GUIDE (Windows PC)
-=======================================
+HAWARY'S BOT - SETUP GUIDE
+==========================
 
-GitHub only stores the code. It can't run the bot.
-Your PC runs it, and you open the dashboard at http://127.0.0.1:8787 on that PC.
-Keep that PC on, with Chrome open on Eldorado.
-Workers can't log in from their own PCs until the bot moves to a real server later.
+You install it once on the bot PC. Workers install nothing.
 
 
-A. INSTALL (only once)
-----------------------
-1. Go to https://nodejs.org and download the "LTS" version.
-   Install it with all the default options.
-
-2. Open https://github.com/Youssef-Hawary/hawarys-bot
-   Click the green "Code" button, then "Download ZIP".
-   Right-click the ZIP, choose "Extract All", and put it somewhere easy,
-   for example: Documents\hawarys-bot
-
-3. Open that folder (the one with README.md in it).
-   Click the address bar at the top of the window, type:  cmd
-   and press Enter. A black window opens.
-
-4. In the black window, type this and press Enter. Wait until it finishes:
-       npm run setup
-   Then type this and press Enter. Wait until it finishes:
-       npm run build
-
-
-B. START THE BOT (every time you turn the PC on)
+A. INSTALL ON THE BOT PC (once, about 2 minutes)
 ------------------------------------------------
-1. Open the bot folder and double-click  start.bat
-   (or: click the address bar, type  cmd , press Enter, then type  npm start )
-   LEAVE THE BLACK WINDOW OPEN. Closing it stops the bot.
+1. Download the installer:
+   https://github.com/Youssef-Hawary/hawarys-bot/releases/latest/download/HawarysBot-Setup.exe
 
-2. In Chrome go to:  http://127.0.0.1:8787
-   The first time, it asks you to create the OWNER account.
-   Pick a strong password.
+2. Open it.
+   If Windows says "Windows protected your PC": click "More info", then "Run anyway".
 
+3. Click "Next" until it's done.
+   On a café PC that resets when it restarts, choose a folder on a drive that keeps
+   its files, for example D:\HawarysBot.
+   When Windows asks for permission (firewall), click "Yes".
 
-C. CHROME EXTENSION (only once)
--------------------------------
-1. In Chrome go to:  chrome://extensions
-   Turn on "Developer mode" (top right).
-   Click "Load unpacked" and pick the "extension" folder inside the bot folder.
-
-2. Click the puzzle icon in Chrome and pin "Hawary's Bot".
-   Click the extension icon and fill in:
-       Dashboard address:  http://127.0.0.1:8787
-       Username / password: your owner account
-   Click "Connect", then "Allow".
+4. The bot starts by itself and opens its own browser with two tabs:
+   Eldorado and the dashboard.
 
 
-D. CONNECT ELDORADO (only once)
--------------------------------
-1. Open https://www.eldorado.gg in the same Chrome and log in to your seller account.
-   Keep the site language set to ENGLISH.
+B. FIRST TIME ONLY
+------------------
+1. In the dashboard tab: create the OWNER account (pick a strong password).
+2. In the Eldorado tab: log in to your seller account. Keep the site language ENGLISH.
+3. Click the puzzle icon at the top right of that browser -> "Hawary's Bot"
+   -> "Connect Eldorado API (owner)". You should see: Eldorado API connected.
 
-2. Click the extension, then "Connect Eldorado API (owner)".
-   You should see:  Eldorado API connected
+The extension is already installed and connected. Nothing else to set up.
 
-3. Keep one Eldorado tab open. The extension listens to Eldorado's live notifications,
-   so new requests are picked up within about a second.
+
+C. EVERY DAY
+------------
+Double-click the "Hawary's Bot" icon on the desktop. That's all.
+- It updates itself when it starts.
+- A small "Hawary's Bot" window starts minimized in the taskbar.
+  Keep it open. Closing it stops the bot.
+- The PC won't go to sleep while the bot runs.
+- Use the bot's own browser for the Eldorado tab the bot works with.
+
+
+D. WORKERS
+----------
+Nothing to install.
+1. Dashboard -> "Team & pay" -> "Add worker" to make their account.
+2. At the top of that page is the "Workers' link", for example:
+       http://192.168.88.5:8787
+   Workers open it on any PC or phone in the café (same router or Wi-Fi)
+   and log in. Save it as a bookmark.
+3. They use Eldorado in their normal browser, like before.
+
+If the link doesn't open on another PC:
+- That PC must be on the same network (same router). Not on this PC's hotspot.
+- Use the link that starts with the same numbers as that PC's address
+  (cmd -> ipconfig -> IPv4 Address).
 
 
 E. TEST WITHOUT RISK (dry run)
 ------------------------------
 1. Dashboard -> Settings: set the Eldorado fee %, and keep "Dry run" ON.
    (Optional) Add a Discord webhook to get "new order" alerts.
-
 2. Dashboard -> Pricing: set your prices.
    Use "Test a request" on the right to check what the bot would charge.
-
 3. Dashboard -> Overview: click "Start bot".
-
 4. Watch "Live offers". New requests show what the bot WOULD offer.
    Nothing is sent to buyers yet.
-
-5. Dashboard -> Settings -> Extension: turn the "Recorder" ON.
-   On Eldorado, open a request and send one chat message to any buyer.
-   Turn the Recorder OFF.
-   Send Claude a screenshot of the recorded list, so chat sending can be matched to Eldorado.
 
 
 F. GO LIVE
@@ -87,45 +73,21 @@ F. GO LIVE
 When the would-offer prices look right (for example after a day):
 Dashboard -> Settings -> turn "Dry run" OFF.
 The bot now sends real offers with your opening message.
-
 New orders appear on the "Order board". Click "Take" to claim one.
 
 
-KEEP IT RUNNING
----------------
-- Windows Settings -> System -> Power -> Sleep: set to "Never".
-- Keep Chrome open with one Eldorado tab.
-- Keep the black "npm start" window open.
+YOUR DATA
+---------
+Accounts, prices, orders and daily backups are in the "data" folder inside the
+install folder (normally %LOCALAPPDATA%\Programs\HawarysBot\data).
+Updates and reinstalling never touch it.
+Extra copy: Dashboard -> Settings -> Backup & restore -> "Download settings".
+
+Coming from the old setup (ZIP + start.bat)? Close the old black window first.
+The new app copies your old data by itself the first time it starts.
 
 
-UPDATING LATER (your settings are kept)
----------------------------------------
-Everything you set up (settings, prices, accounts, orders) is saved in the folder
-server\data inside the bot folder. Updates never touch it.
-
-1. Close the black window where the bot is running.
-2. Double-click  update.bat  in the bot folder. It backs up your data first,
-   downloads the newest version from GitHub and installs it.
-3. Chrome: go to chrome://extensions and click the reload icon on "Hawary's Bot".
-4. Press F5 on your Eldorado tab.
-5. Double-click  start.bat
-
-Never delete the bot folder and never extract an update into a NEW folder,
-or the bot starts empty. (If that happens: copy the old server\data folder back.)
-
-Extra safety: Dashboard -> Settings -> Backup & restore
-- "Download settings" saves your settings and prices to a file.
-- "Choose file" loads them back (e.g. on another PC or a server).
-- A full backup is made automatically every day in server\data\backups.
-
-
-WHAT MIGHT NOT WORK THE FIRST TIME
-----------------------------------
-These parts have never run against the real Eldorado:
-- the "Connect Eldorado API" button
-- reading the request details
-- sending chat messages
-
-That's why step E stays in dry run.
-If something shows an error or looks wrong, send Claude a screenshot and it will be fixed.
-After a fix: download the ZIP again (see UPDATING LATER) and reload the extension.
+IF SOMETHING GOES WRONG
+-----------------------
+The bot's window stays open and shows the error.
+Take a screenshot and send it to Claude.

@@ -1,0 +1,78 @@
+# Builds the Windows app (HawarysBot-Setup.exe + app.zip for self-updates).
+# Every push to master publishes a GitHub Release; installed bots pick it up the next time they start.
+# Pull requests only build it (download it from the run's Artifacts to try it).
+name: Windows app
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-app-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Version
+        id: v
+        run: echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        run: |
+          npm --prefix server ci --omit=dev
+          npm --prefix web ci
+
+      - name: Test
+        run: node --test server/src/*.test.ts desktop/lib.test.ts
+
+      - name: Build dashboard
+        run: npm run build
+
+      - name: Stage app (downloads Node and Chrome for Testing)
+        run: python scripts/package_windows.py stage --version ${{ steps.v.outputs.version }}
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=${{ steps.v.outputs.version }}" installer\HawarysBot.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Manifest
+        run: python scripts/package_windows.py manifest --version ${{ steps.v.outputs.version }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HawarysBot-${{ steps.v.outputs.version }}
+          path: |
+            dist/HawarysBot-Setup.exe
+            dist/app.zip
+            dist/manifest.json
+
+      - name: Publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=${{ steps.v.outputs.version }}
+          gh release create "v$V" dist/HawarysBot-Setup.exe dist/app.zip dist/manifest.json \
+            --target "$GITHUB_SHA" --title "Hawary's Bot v$V" --latest \
+            --notes "$(git log -1 --pretty=%s)
+
+          Install: download HawarysBot-Setup.exe and run it. Installed bots update themselves when they start."

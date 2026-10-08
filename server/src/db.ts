@@ -3,7 +3,9 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 const DB_PATH = process.env.DB_PATH ?? resolve(import.meta.dirname, '../data/hawary.db');
-mkdirSync(dirname(DB_PATH), { recursive: true });
+/** Folder with the database and its backups (server/data, or the desktop app's data folder). */
+export const DATA_DIR = dirname(DB_PATH);
+mkdirSync(DATA_DIR, { recursive: true });
 
 export const db = new DatabaseSync(DB_PATH);
 

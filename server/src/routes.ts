@@ -1,7 +1,9 @@
 import { Hono, type Context, type Next } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { streamSSE } from 'hono/streaming';
-import { db, getSetting, setSetting, audit, now } from './db.ts';
+import { timingSafeEqual } from 'node:crypto';
+import { db, getSetting, setSetting, audit, now, DATA_DIR } from './db.ts';
+import { lanLinks } from './network.ts';
 import { createSession, createUser, deleteSession, login, userCount, userFromToken, hashPassword, type User } from './auth.ts';
 import { GAMES, GAME_NAMES, TIERS, ladder, type Game } from './ranks.ts';
 import { REGIONS, REGION_NAMES, POINTS_LABEL, SERVICE_KEYS, SERVICE_INFO, getPricing, savePricing, defaultPricing, migratePricing, normalizeRequest, quote } from './pricing.ts';
@@ -22,9 +24,19 @@ const secure = () => process.env.SECURE_COOKIES === '1';
 
 // ---------------- auth ----------------
 
+/** The caller's IP. Proxy headers only count when the request comes from this machine (Caddy on the server). */
+function clientIp(c: Context) {
+  const remote: string = (c.env as any)?.incoming?.socket?.remoteAddress ?? '';
+  const viaLocalProxy = isLoopback(remote);
+  const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip');
+  return (viaLocalProxy && forwarded) || remote || 'local';
+}
+const isLoopback = (ip: string) => /^(127\.|::1$|::ffff:127\.)/.test(ip);
+
 const attempts = new Map<string, { n: number; until: number }>();
 function rateLimited(c: Context) {
-  const ip = c.req.header('x-forwarded-for')?.split(',')[0] ?? c.req.header('x-real-ip') ?? 'local';
+  // Per device: on a shared café network one person's typos must not lock everyone out.
+  const ip = clientIp(c);
   const a = attempts.get(ip);
   if (a && a.until > now() && a.n >= 8) return true;
   attempts.set(ip, { n: (a && a.until > now() ? a.n : 0) + 1, until: now() + 10 * 60_000 });
@@ -65,6 +77,22 @@ api.post('/ext/login', async c => {
   return c.json({ token: createSession(user.id, 'extension'), user: { name: user.display_name, role: user.role } });
 });
 
+// Desktop app: the extension inside the bot's own browser connects itself as the owner, no typing.
+// Only works on this PC (loopback) and with the secret the launcher wrote next to the extension.
+api.post('/ext/pair', async c => {
+  const secret = process.env.HB_PAIR_SECRET;
+  if (!secret) return c.json({ error: 'Pairing is off' }, 404);
+  if (!isLoopback((c.env as any)?.incoming?.socket?.remoteAddress ?? '')) return c.json({ error: 'Only from the bot PC' }, 403);
+  const { secret: given } = await c.req.json().catch(() => ({} as any));
+  const a = Buffer.from(String(given ?? '')), b = Buffer.from(secret);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return c.json({ error: 'Wrong pairing code' }, 401);
+  const owner = db.prepare("SELECT id, display_name FROM users WHERE role = 'owner' AND active = 1 ORDER BY id LIMIT 1").get() as
+    { id: number; display_name: string } | undefined;
+  if (!owner) return c.json({ error: 'Create the owner account in the dashboard first' }, 409);
+  audit(owner.id, 'extension.paired');
+  return c.json({ token: createSession(owner.id, 'extension'), user: { name: owner.display_name, role: 'owner' } });
+});
+
 async function requireUser(c: Context<Env>, next: Next) {
   const bearer = c.req.header('authorization')?.replace(/^Bearer\s+/i, '');
   const token = bearer || getCookie(c, COOKIE);
@@ -80,7 +108,7 @@ const ownerOnly = async (c: Context<Env>, next: Next) => {
 };
 
 api.use('/*', async (c, next) => {
-  const open = ['/api/auth/status', '/api/auth/setup', '/api/auth/login', '/api/ext/login'];
+  const open = ['/api/auth/status', '/api/auth/setup', '/api/auth/login', '/api/ext/login', '/api/ext/pair', '/api/app/ping'];
   if (open.includes(c.req.path)) return next();
   return requireUser(c, next);
 });
@@ -93,6 +121,18 @@ api.post('/auth/logout', c => {
 
 const publicUser = (u: User) => ({ id: u.id, username: u.username, name: u.display_name, role: u.role, color: u.color });
 api.get('/auth/me', c => c.json(publicUser(c.get('user'))));
+
+// ---------------- app info ----------------
+
+const APP = { version: process.env.HB_APP_VERSION ?? 'dev', desktop: process.env.HB_DESKTOP === '1' };
+const PORT = Number(process.env.PORT ?? 8787);
+// The desktop launcher checks this to see whether the bot is already running.
+api.get('/app/ping', c => c.json({ app: "Hawary's Bot", ...APP }));
+api.get('/app', c => c.json({
+  ...APP,
+  links: lanLinks(PORT),
+  dataDir: c.get('user').role === 'owner' ? DATA_DIR : undefined,
+}));
 
 // ---------------- live events (SSE) ----------------
 

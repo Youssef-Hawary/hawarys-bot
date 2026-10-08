@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { KeyRound, Bot, Bell, Percent, Puzzle, PlugZap, Trash2, CircleDot, Download, Upload, Archive } from 'lucide-react';
 import { api, ago, useData } from '../api.ts';
 import { Badge, Button, Field, Num, PageHeader, Section, Toggle, clsx, useAction } from '../components/ui.tsx';
+import { useAppInfo } from '../components/WorkerLink.tsx';
 
 export function SettingsPage() {
   const { data, reload } = useData<any>('/settings', ['bot']);
@@ -9,6 +10,7 @@ export function SettingsPage() {
   const [s, setS] = useState<any>(null);
   const [secret, setSecret] = useState('');
   const { busy, run } = useAction();
+  const { data: app } = useAppInfo();
   useEffect(() => { if (data && !s) setS(structuredClone(data)); }, [data, s]);
   if (!s) return <><PageHeader title="Settings" /><div className="skeleton h-96" /></>;
 
@@ -17,7 +19,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Owner only. Keys and webhooks are stored on your server, never in the browser." />
+      <PageHeader title="Settings" subtitle={`Owner only. Keys and webhooks are stored on your server, never in the browser.${app ? ` · Hawary's Bot v${app.version}` : ''}`} />
       <div className="grid gap-5 xl:grid-cols-2">
         <Section title={<span className="flex items-center gap-2"><KeyRound size={16} /> Eldorado API keys</span>}
           subtitle="Easiest: in the Chrome extension click Connect Eldorado API (with an Eldorado tab open). Or paste keys here. The secret is never shown again.">
@@ -86,6 +88,7 @@ export function SettingsPage() {
 }
 
 function ExtensionPanel({ s, ov, onRecord, busy }: { s: any; ov: any; onRecord: (v: boolean) => void; busy: string | null }) {
+  const { data: app } = useAppInfo();
   const { data: caps, reload } = useData<any[]>('/captures');
   useEffect(() => { if (!s.recording) return; const i = setInterval(reload, 4000); return () => clearInterval(i); }, [s.recording, reload]);
   const exts = ov?.bot?.extensions ?? [];
@@ -94,13 +97,22 @@ function ExtensionPanel({ s, ov, onRecord, busy }: { s: any; ov: any; onRecord: 
       subtitle="Reads request details (ranks, RR, server, duo) and sends chat messages from your logged-in Eldorado tab.">
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="space-y-4">
-          <ol className="list-inside list-decimal space-y-1.5 text-sm text-fg-2">
-            <li>Download the extension folder (<code className="text-neon">extension/</code> in the project, or the zip below).</li>
-            <li>Chrome → <code className="text-neon">chrome://extensions</code> → turn on <b>Developer mode</b>.</li>
-            <li><b>Load unpacked</b> → pick the folder. Pin the cyan H icon.</li>
-            <li>Click it, enter this dashboard's address and your login, and keep one Eldorado tab open.</li>
-          </ol>
-          <a href="/hawarys-bot-extension.zip" download><Button icon={<Download size={15} />}>Download extension (.zip)</Button></a>
+          {app?.desktop && (
+            <p className="rounded-[8px] border border-ok/30 bg-ok/[.07] p-3 text-sm text-fg-2">
+              <b className="text-ok">Already set up.</b> The bot's own browser (opened by the Hawary's Bot desktop icon) loads this extension and connects it by itself.
+              Just keep its Eldorado tab open. Workers don't need it.
+            </p>
+          )}
+          <details open={!app?.desktop} className="text-sm text-fg-2">
+            <summary className="cursor-pointer font-semibold text-fg-3">{app?.desktop ? 'Use it in another Chrome too (optional)' : 'Set it up in Chrome'}</summary>
+            <ol className="mt-2 list-inside list-decimal space-y-1.5">
+              <li>Download the extension (zip below) and unzip it.</li>
+              <li>Chrome → <code className="text-neon">chrome://extensions</code> → turn on <b>Developer mode</b>.</li>
+              <li><b>Load unpacked</b> → pick the folder. Pin the cyan H icon.</li>
+              <li>Click it, enter this dashboard's address and your login, and keep one Eldorado tab open.</li>
+            </ol>
+            <a href="/hawarys-bot-extension.zip" download className="mt-3 inline-block"><Button icon={<Download size={15} />}>Download extension (.zip)</Button></a>
+          </details>
           <div>
             <div className="mb-2 text-[13px] font-semibold text-fg-2">Connected right now</div>
             {!exts.length ? <p className="text-sm text-fg-3">No extension online.</p> : exts.map((e: any, i: number) => (
@@ -136,6 +148,8 @@ function ExtensionPanel({ s, ov, onRecord, busy }: { s: any; ov: any; onRecord: 
 
 function BackupPanel({ onImported }: { onImported: () => void }) {
   const { busy, run } = useAction();
+  const { data: app } = useAppInfo();
+  const folder = app?.dataDir ?? 'the data folder';
   const importFile = (file: File) => run('import', async () => {
     let body: unknown;
     try { body = JSON.parse(await file.text()); } catch { throw new Error("That file isn't a settings file"); }
@@ -145,7 +159,7 @@ function BackupPanel({ onImported }: { onImported: () => void }) {
   }, 'Settings loaded');
   return (
     <Section className="xl:col-span-2" title={<span className="flex items-center gap-2"><Archive size={16} /> Backup &amp; restore</span>}
-      subtitle="Your settings are saved on this PC (server\data) and kept when you update. Keep an extra copy here, or move them to another PC or a server.">
+      subtitle={`Your settings are saved on this PC (${folder}) and kept when you update. Keep an extra copy here, or move them to another PC or a server.`}>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="well p-4">
           <div className="text-[14px] font-semibold">Save settings to a file</div>
@@ -164,8 +178,8 @@ function BackupPanel({ onImported }: { onImported: () => void }) {
         </div>
         <div className="well p-4">
           <div className="text-[14px] font-semibold">Full backup</div>
-          <p className="mt-1 text-[12.5px] text-fg-3">Everything (orders, workers, money, settings) is copied to server\data\backups once a day automatically. Make one now:</p>
-          <Button className="mt-3" icon={<Archive size={15} />} loading={busy === 'backup'} onClick={() => run('backup', () => api('/settings/backup', { method: 'POST' }), 'Backup saved in server\\data\\backups')}>Back up now</Button>
+          <p className="mt-1 text-[12.5px] text-fg-3">Everything (orders, workers, money, settings) is copied to the <b>backups</b> folder inside {folder} once a day automatically. Make one now:</p>
+          <Button className="mt-3" icon={<Archive size={15} />} loading={busy === 'backup'} onClick={() => run('backup', () => api('/settings/backup', { method: 'POST' }), 'Backup saved in the backups folder')}>Back up now</Button>
         </div>
       </div>
     </Section>
