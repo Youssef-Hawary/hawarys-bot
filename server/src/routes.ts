@@ -2,8 +2,11 @@ import { Hono, type Context, type Next } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { streamSSE } from 'hono/streaming';
 import { timingSafeEqual } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { db, getSetting, setSetting, audit, now, DATA_DIR } from './db.ts';
 import { lanLinks } from './network.ts';
+import { KEY_URL, UpdateError, latestRelease, looksLikeKey, newer, readKey, saveKey } from './updates.ts';
 import { createSession, createUser, deleteSession, login, userCount, userFromToken, hashPassword, type User } from './auth.ts';
 import { GAMES, GAME_NAMES, TIERS, ladder, type Game } from './ranks.ts';
 import { REGIONS, REGION_NAMES, POINTS_LABEL, SERVICE_KEYS, SERVICE_INFO, getPricing, savePricing, defaultPricing, migratePricing, normalizeRequest, quote } from './pricing.ts';
@@ -133,6 +136,40 @@ api.get('/app', c => c.json({
   links: lanLinks(PORT),
   dataDir: c.get('user').role === 'owner' ? DATA_DIR : undefined,
 }));
+
+// ---------------- updates (Settings → Updates) ----------------
+
+const keyInfo = () => { const k = readKey(DATA_DIR); return { hasKey: !!k, keyLast4: k ? k.slice(-4) : null }; };
+async function checkUpdates() {
+  try {
+    const rel = await latestRelease(readKey(DATA_DIR));
+    return { ok: true as const, latest: rel.version, current: APP.version, newer: newer(rel.version, APP.version) };
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message, kind: e instanceof UpdateError ? e.kind : 'other' };
+  }
+}
+
+api.get('/updates', ownerOnly, c => c.json({ ...APP, ...keyInfo(), keyUrl: KEY_URL }));
+
+api.put('/updates/key', ownerOnly, async c => {
+  const { key } = await c.req.json().catch(() => ({} as any));
+  const k = String(key ?? '').trim();
+  if (k && !looksLikeKey(k)) return c.json({ error: "That doesn't look like a GitHub key. It starts with github_pat_" }, 400);
+  saveKey(DATA_DIR, k);
+  audit(c.get('user').id, k ? 'updates.key_saved' : 'updates.key_removed');
+  return c.json({ ok: true, ...keyInfo(), check: k ? await checkUpdates() : null });
+});
+
+api.post('/updates/check', ownerOnly, async c => c.json(await checkUpdates()));
+
+// Desktop app: restart the bot so the launcher installs the new version. The bot's browser stays open.
+api.post('/updates/restart', ownerOnly, c => {
+  if (!APP.desktop) return c.json({ error: 'Only in the desktop app. Restart the bot yourself.' }, 400);
+  writeFileSync(join(DATA_DIR, 'restart-quiet'), '');
+  log('info', `🔄 ${c.get('user').display_name} restarted the bot to update it`);
+  setTimeout(() => process.exit(75), 800); // 75 = "start me again" for the launcher (runtime\launch.cjs)
+  return c.json({ ok: true });
+});
 
 // ---------------- live events (SSE) ----------------
 

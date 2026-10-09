@@ -6,16 +6,14 @@
 // Install folder layout:  runtime\ (node, chrome, launch.cjs)   app\<version>\ (this code)   data\ (database, backups, browser profile)
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { copyFileSync, cpSync, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
 import { pathToFileURL } from 'node:url';
-import { findOldDatabases, newer, sha256File } from './lib.ts';
+import { findOldDatabases, sha256File } from './lib.ts';
 import { lanLinks } from '../server/src/network.ts';
+import { UpdateError, asset, downloadAsset, latestRelease, newer, readKey, readManifest, type Asset, type Manifest, type Release } from '../server/src/updates.ts';
 
-const REPO = 'Youssef-Hawary/hawarys-bot';
 const PORT = 8787;
 const LOCAL = `http://127.0.0.1:${PORT}`;
 const APP_DIR = resolve(import.meta.dirname, '..');
@@ -68,14 +66,9 @@ function stopBotBrowser() {
 
 // ---------------- updates ----------------
 
-type Asset = { url: string; sha256: string };
-type Manifest = { version: string; runtime: string; app: Asset; setup: Asset };
-
-async function download(asset: Asset, file: string) {
-  const r = await fetch(asset.url, { signal: AbortSignal.timeout(15 * 60_000) });
-  if (!r.ok || !r.body) throw new Error(`download failed (HTTP ${r.status})`);
-  await pipeline(Readable.fromWeb(r.body as any), createWriteStream(file));
-  if (await sha256File(file) !== asset.sha256) throw new Error('the download is damaged (checksum mismatch)');
+async function download(a: Asset, sha256: string, key: string, file: string) {
+  await downloadAsset(a, key, file);
+  if (await sha256File(file) !== sha256) throw new Error('the download is damaged (checksum mismatch)');
 }
 
 function setCurrent(version: string, previous: string | null) {
@@ -86,9 +79,9 @@ function setCurrent(version: string, previous: string | null) {
 /** Exit code that tells runtime\launch.cjs to start us again right away (it re-reads current.txt). */
 const RESTART = 75;
 
-async function installApp(m: Manifest) {
+async function installApp(m: Manifest, zipAsset: Asset, key: string) {
   const zip = join(tmpdir(), `hawarys-bot-${m.version}.zip`);
-  await download(m.app, zip);
+  await download(zipAsset, m.app.sha256, key, zip);
   const target = join(APPS, m.version), partial = `${target}.partial`;
   rmSync(partial, { recursive: true, force: true });
   mkdirSync(partial, { recursive: true });
@@ -116,29 +109,29 @@ function runInstaller(exe: string) {
 /** Returns true when the launcher is restarting into a new version (stop here). */
 async function update(): Promise<boolean> {
   if (process.env.HB_NO_UPDATE === '1') return false;
-  let m: Manifest;
+  const key = readKey(DATA);
+  let rel: Release, m: Manifest;
   try {
-    const url = process.env.HB_UPDATE_MANIFEST ?? `https://github.com/${REPO}/releases/latest/download/manifest.json`; // override: testing only
-    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) return false;
-    m = await r.json() as Manifest;
-  } catch {
-    say(c.dim('  No internet or GitHub not reachable: skipping the update check.'));
+    rel = await latestRelease(key);
+    if (!newer(rel.version, VERSION) || read(join(APPS, 'skip.txt')) === rel.version) return false;
+    m = await readManifest(rel, key);
+  } catch (e) {
+    const offline = e instanceof UpdateError && e.kind === 'offline';
+    say(offline ? c.dim('  No internet: skipping the update check.') : `  ${c.yellow('!')}  Update check: ${(e as Error).message}`);
     return false;
   }
-  if (!newer(m.version, VERSION) || read(join(APPS, 'skip.txt')) === m.version) return false;
   say(`  ${c.yellow('⬇')}  Updating to v${m.version}…`);
   try {
     const runtime = JSON.parse(read(join(RUNTIME, 'runtime.json')) || '{}').id;
     if (m.runtime !== runtime) {
       // Node or the browser changed too: run the full installer (bigger download, still automatic).
       const exe = join(tmpdir(), `HawarysBot-Setup-${m.version}.exe`);
-      await download(m.setup, exe);
+      await download(asset(rel, 'HawarysBot-Setup.exe'), m.setup.sha256, key, exe);
       say('  The installer runs now and reopens the bot when it is done. This window will close.');
       runInstaller(exe);
       return true;
     }
-    await installApp(m);
+    await installApp(m, asset(rel, 'app.zip'), key);
     say(`  ${c.green('✓')}  Updated to v${m.version}. Restarting…`);
     say();
     process.exit(RESTART);
@@ -243,8 +236,10 @@ if (running && running !== 'other') {
   if (started) {
     if (!(await waitUp(30_000))) throw new Error("The bot didn't start within 30 seconds");
     keepAwake();
-    // After a crash the bot's browser is usually still open: don't add duplicate tabs.
-    const opened = process.env.HB_AFTER_CRASH === '1' ? false : openBrowser(['https://www.eldorado.gg/', LOCAL]);
+    // After a crash, or "Restart and update" in the dashboard, the bot's browser is still open: don't add duplicate tabs.
+    const quiet = process.env.HB_AFTER_CRASH === '1' || existsSync(join(DATA, 'restart-quiet'));
+    rmSync(join(DATA, 'restart-quiet'), { force: true });
+    const opened = quiet ? false : openBrowser(['https://www.eldorado.gg/', LOCAL]);
     try { cleanupOldVersions(); } catch { /* a file in use; next time */ }
     const links = lanLinks(PORT).filter(l => l.kind === 'lan');
     say();

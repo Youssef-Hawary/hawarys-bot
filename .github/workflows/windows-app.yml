@@ -1,6 +1,7 @@
 # Builds the Windows app (HawarysBot-Setup.exe + app.zip for self-updates).
-# Every push to master publishes a GitHub Release; installed bots pick it up the next time they start.
-# Pull requests only build it (download it from the run's Artifacts to try it).
+# Every push to master publishes a GitHub Release; installed bots pick it up the next time they start
+# (the repo is private: they read it with the GitHub key saved in Settings → Updates).
+# Pull requests only build it (download it from the run's Artifacts to try it; kept for 1 day to save storage).
 name: Windows app
 
 on:
@@ -41,6 +42,10 @@ jobs:
       - name: Test
         run: node --test server/src/*.test.ts desktop/lib.test.ts
 
+      - name: Typecheck dashboard (report only)
+        continue-on-error: true
+        run: npm --prefix web run typecheck -- --pretty false
+
       - name: Build dashboard
         run: npm run build
 
@@ -58,8 +63,10 @@ jobs:
         run: python scripts/package_windows.py manifest --version ${{ steps.v.outputs.version }}
 
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request'
         with:
           name: HawarysBot-${{ steps.v.outputs.version }}
+          retention-days: 1
           path: |
             dist/HawarysBot-Setup.exe
             dist/app.zip

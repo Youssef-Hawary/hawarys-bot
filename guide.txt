@@ -6,7 +6,8 @@ You install it once on the bot PC. Workers install nothing.
 
 A. INSTALL ON THE BOT PC (once, about 2 minutes)
 ------------------------------------------------
-1. Download the installer:
+1. The bot's GitHub repo is private. Log in to GitHub in your browser first, then
+   download the installer:
    https://github.com/Youssef-Hawary/hawarys-bot/releases/latest/download/HawarysBot-Setup.exe
 
 2. Open it.
@@ -28,13 +29,18 @@ B. FIRST TIME ONLY
 3. Click the puzzle icon at the top right of that browser -> "Hawary's Bot"
    -> "Connect Eldorado API (owner)". You should see: Eldorado API connected.
 
-The extension is already installed and connected. Nothing else to set up.
+The extension is already installed and connected.
+
+4. Updates key (so the bot can update itself from the private repo):
+   Dashboard -> Settings -> Updates -> "Open GitHub's key page".
+   Under "Repository access" pick "Only select repositories" -> hawarys-bot.
+   Scroll down, click "Generate token", copy it, paste it in Settings -> Updates, Save.
 
 
 C. EVERY DAY
 ------------
 Double-click the "Hawary's Bot" icon on the desktop. That's all.
-- It updates itself when it starts.
+- It updates itself when it starts (Settings -> Updates shows the version).
 - A small "Hawary's Bot" window starts minimized in the taskbar.
   Keep it open. Closing it stops the bot.
 - The PC won't go to sleep while the bot runs.

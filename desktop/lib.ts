@@ -3,18 +3,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** true when version `a` (like "1.0.42") is newer than `b`. Anything that isn't a version is never newer. */
-export function newer(a: string, b: string) {
-  const parse = (v: string) => /^\d+(\.\d+)*$/.test(v) ? v.split('.').map(Number) : null;
-  const x = parse(a), y = parse(b);
-  if (!x) return false;
-  if (!y) return true; // "dev" or a broken install: any real release is newer
-  for (let i = 0; i < Math.max(x.length, y.length); i++) {
-    const d = (x[i] ?? 0) - (y[i] ?? 0);
-    if (d) return d > 0;
-  }
-  return false;
-}
+export { newer } from '../server/src/updates.ts';
 
 export function sha256File(file: string): Promise<string> {
   return new Promise((ok, fail) => {
