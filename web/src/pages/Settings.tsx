@@ -3,6 +3,7 @@ import { KeyRound, Bot, Bell, Percent, Puzzle, PlugZap, Trash2, CircleDot, Downl
 import { api, ago, useData } from '../api.ts';
 import { Badge, Button, Field, Num, PageHeader, Section, Toggle, clsx, useAction } from '../components/ui.tsx';
 import { useAppInfo } from '../components/WorkerLink.tsx';
+import { UpdatesPanel } from '../components/UpdatesPanel.tsx';
 
 export function SettingsPage() {
   const { data, reload } = useData<any>('/settings', ['bot']);
@@ -81,6 +82,7 @@ export function SettingsPage() {
         </Section>
 
         <ExtensionPanel s={s} ov={ov} onRecord={v => save('rec', { recording: v }, v ? 'Recording on: browse Eldorado now' : 'Recording off')} busy={busy} />
+        <UpdatesPanel className="xl:col-span-2" />
         <BackupPanel onImported={() => { reload(); setS(null); }} />
       </div>
     </>

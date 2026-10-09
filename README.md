@@ -1,17 +1,21 @@
 # Hawary's Bot
 
 An Eldorado.gg boosting bot with a team dashboard, for Valorant and League of Legends.
+This repository is **private**: only accounts you invite can see the code and download the installer.
 
 ## Install on the bot PC (Windows)
 
-1. Download **[HawarysBot-Setup.exe](https://github.com/Youssef-Hawary/hawarys-bot/releases/latest/download/HawarysBot-Setup.exe)** and open it.
+1. Log in to GitHub in your browser, then download
+   **[HawarysBot-Setup.exe](https://github.com/Youssef-Hawary/hawarys-bot/releases/latest/download/HawarysBot-Setup.exe)** and open it.
    If Windows says *"Windows protected your PC"*, click **More info → Run anyway** (the installer isn't code-signed).
 2. Click **Next** until it's done. When Windows asks for permission (the firewall step), click **Yes**, so the other PCs can connect.
 3. The bot starts and opens **its own browser** with Eldorado and the dashboard.
 
 **First time only:** create the owner account in the dashboard, log in to your Eldorado seller account in that browser,
 then click the extension icon (puzzle piece → Hawary's Bot) → **Connect Eldorado API (owner)**.
-The extension is already installed and connected, nothing else to set up.
+The extension is already installed and connected.
+Then **Settings → Updates**: make a read-only GitHub key with the link there and paste it, so the bot can download its
+updates from this private repo.
 
 **Every day:** double-click the **Hawary's Bot** icon on the desktop. That's all. It updates itself when it starts.
 
@@ -67,7 +71,9 @@ legacy/     First Python prototype (not used)
 
 Every push to `master` builds the installer on GitHub Actions (`.github/workflows/windows-app.yml`) and publishes a
 release `v1.0.<build>` with `HawarysBot-Setup.exe`, `app.zip` and `manifest.json`.
-When the bot starts it reads the latest `manifest.json`: if there's a newer version it downloads the small `app.zip`
+When the bot starts it asks the GitHub API for the latest release (with the read-only key saved in
+*Settings → Updates*, stored in `data/github-key.txt`, because the repo is private) and reads its `manifest.json`:
+if there's a newer version it downloads the small `app.zip`
 (checked with SHA-256), switches to it and keeps the previous version. If a new version fails to start, it goes back
 to the previous one automatically and skips that version.
 
